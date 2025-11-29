@@ -108,7 +108,8 @@ namespace Prediction
         {
             return localEntity;
         }
-        
+
+        private PhysicsStateRecord specialHostRecord = new PhysicsStateRecord();
         private void FixedUpdate()
         {    
             if (!setup) 
@@ -144,12 +145,17 @@ namespace Prediction
                 {
                     ServerPredictedEntity entity = pair.Key;
                     uint id = pair.Value;
-                    PhysicsStateRecord state = entity.ServerSimulationTick();
                     
-                    //NOTE: host (server + client) won't do any prediction, so no tick_id advancement, use server tick
+                    PhysicsStateRecord state;
                     if (isClient && id == localEntityId)
                     {
+                        entity.PopulatePhysicsStateRecord(tickId, specialHostRecord);
+                        state = specialHostRecord;
                         state.tickId = tickId;
+                    }
+                    else
+                    {
+                        state = entity.ServerSimulationTick();
                     }
                     
                     try

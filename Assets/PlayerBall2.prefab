@@ -188,8 +188,9 @@ MonoBehaviour:
   syncInterval: 0
   rb: {fileID: 1526699890830082510}
   pev: {fileID: 6699726022370081141}
-  powerMagnitude: 3
-  boostPowerMultiplier: 7
+  pcam: {fileID: 0}
+  powerMagnitude: 5
+  boostPowerMultiplier: 10
 --- !u!114 &2786243932360149106
 MonoBehaviour:
   m_ObjectHideFlags: 0

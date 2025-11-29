@@ -84,11 +84,13 @@ public class PlayerController : NetworkBehaviour, PredictableComponent, Predicta
         Vector3 input = Vector3.zero;
         if (Input.GetKey(KeyCode.UpArrow))
         {
-            input += pcam.transform.forward;
+            //input += pcam.transform.forward;
+            input += pcam.transform.up;
         }
         if (Input.GetKey(KeyCode.DownArrow))
         {
-            input += pcam.transform.forward * -1;
+            //input += pcam.transform.forward * -1;
+            input += pcam.transform.up * -1;
         }
         if (Input.GetKey(KeyCode.LeftArrow))
         {

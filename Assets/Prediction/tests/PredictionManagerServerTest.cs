@@ -1,7 +1,9 @@
-﻿namespace Prediction.Tests
+﻿#if (UNITY_EDITOR) 
+namespace Prediction.Tests
 {
     public class PredictionManagerServerTest
     {
         
     }
 }
+#endif

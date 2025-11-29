@@ -1,4 +1,5 @@
-﻿using NUnit.Framework;
+﻿#if (UNITY_EDITOR) 
+using NUnit.Framework;
 using Prediction.utils;
 
 namespace Prediction.Tests
@@ -81,3 +82,4 @@ namespace Prediction.Tests
         //TODO: test get start & end
     }
 }
+#endif

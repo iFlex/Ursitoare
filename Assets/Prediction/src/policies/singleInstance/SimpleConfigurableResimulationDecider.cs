@@ -12,7 +12,7 @@ namespace Prediction.policies.singleInstance
 
         public SimpleConfigurableResimulationDecider()
         {
-            maxDelta = 1.0f;
+            maxDelta = 0.3f;
             maxAngleDelta = 0f;
             maxVeloAngleDelta = 0;
             maxAngularVeloMagDelta = 0;

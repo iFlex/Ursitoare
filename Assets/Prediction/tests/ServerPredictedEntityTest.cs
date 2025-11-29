@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿#if (UNITY_EDITOR) 
+using System.Linq;
 using NUnit.Framework;
 using Prediction.data;
 using Prediction.Tests.mocks;
@@ -276,3 +277,4 @@ namespace Prediction.Tests
         //TODO: test buffer too big, skip ahead...
     }
 }
+#endif

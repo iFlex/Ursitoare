@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿#if (UNITY_EDITOR) 
+using System.Collections.Generic;
 using NUnit.Framework;
 using Prediction.data;
 using Prediction.policies.singleInstance;
@@ -352,3 +353,4 @@ namespace Prediction.Tests
         //TODO: test slowdown to catch server? or snap?
     }
 }
+#endif

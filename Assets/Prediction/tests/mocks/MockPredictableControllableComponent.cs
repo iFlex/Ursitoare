@@ -1,4 +1,5 @@
-﻿using Prediction.data;
+﻿#if (UNITY_EDITOR) 
+using Prediction.data;
 using UnityEngine;
 
 namespace Prediction.Tests.mocks
@@ -53,3 +54,4 @@ namespace Prediction.Tests.mocks
         }
     }
 }
+#endif

@@ -1,4 +1,5 @@
-﻿using Prediction.Simulation;
+﻿#if (UNITY_EDITOR) 
+using Prediction.Simulation;
 using UnityEngine;
 
 namespace Prediction.Tests.mocks
@@ -31,3 +32,4 @@ namespace Prediction.Tests.mocks
         }
     }
 }
+#endif

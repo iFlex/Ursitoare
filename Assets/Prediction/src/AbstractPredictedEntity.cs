@@ -28,7 +28,7 @@ namespace Prediction
             }
         }
         
-        protected void PopulatePhysicsStateRecord(uint tickId, PhysicsStateRecord stateData)
+        public void PopulatePhysicsStateRecord(uint tickId, PhysicsStateRecord stateData)
         {
             stateData.tickId = tickId;
             stateData.position = rigidbody.position;

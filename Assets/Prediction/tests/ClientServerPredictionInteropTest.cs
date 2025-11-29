@@ -1,4 +1,5 @@
-﻿using NUnit.Framework;
+﻿#if (UNITY_EDITOR) 
+using NUnit.Framework;
 using Prediction.data;
 using Prediction.policies.singleInstance;
 using Prediction.Tests.mocks;
@@ -105,3 +106,4 @@ namespace Prediction.Tests
         }
     }
 }
+#endif

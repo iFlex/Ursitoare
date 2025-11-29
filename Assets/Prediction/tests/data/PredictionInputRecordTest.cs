@@ -1,4 +1,5 @@
-﻿using NUnit.Framework;
+﻿#if (UNITY_EDITOR) 
+using NUnit.Framework;
 using Prediction.data;
 
 namespace Prediction.Tests.data
@@ -51,3 +52,4 @@ namespace Prediction.Tests.data
         }
     }
 }
+#endif
