@@ -36,6 +36,8 @@ namespace Prediction
         public uint totalResimulationStepsOverbudget = 0;
         public uint totalResimulations = 0;
         public uint totalSimulationSkips = 0;
+        public bool snapOnSimSkip = false;
+        public bool protectFromOversimulation = false;
         
         public ClientPredictedEntity(int bufferSize, Rigidbody rb, GameObject visuals, PredictableControllableComponent[] controllablePredictionContributors, PredictableComponent[] predictionContributors) : base(rb, visuals, controllablePredictionContributors, predictionContributors)
         {
@@ -146,14 +148,17 @@ namespace Prediction
                 
                 if (resimulationEligibilityCheckHook(latestServerState.tickId, localStateBuffer, serverStateBuffer))
                 {
-                    if (CanResiumlate())
+                    if (!protectFromOversimulation || CanResiumlate())
                     {
                         ResimulateFrom(latestServerState.tickId, lastAppliedTick, latestServerState);
                     }
                     else
                     {
                         totalSimulationSkips++;
-                        SnapTo(latestServerState, true);
+                        if (snapOnSimSkip)
+                        {
+                            SnapTo(latestServerState, true);
+                        }
                     }
                 }
                 else

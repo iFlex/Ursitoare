@@ -56,9 +56,10 @@ public class PlayerController : NetworkBehaviour, PredictableComponent, Predicta
 
     private void Update()
     {
-        if (pcam && !pcam.Follow)
+        if (pcam && !pcam.Follow && clientPredictedEntity != null)
         {
-            pcam.Follow = pev.transform;
+            //pcam.Follow = pev.transform;
+            pcam.Follow = clientPredictedEntity.gameObject.transform;
         }
 
         if (clientPredictedEntity != null && SingletonUtils.instance.clientText)
