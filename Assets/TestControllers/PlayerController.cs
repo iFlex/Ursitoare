@@ -81,6 +81,7 @@ public abstract class PlayerController : NetworkBehaviour, PredictableComponent,
         if (pcam && !pcam.Follow && clientPredictedEntity != null)
         {
             pcam.Follow = pev.visualsEntity.transform;
+            SingletonUtils.instance.topCam.Follow = pev.visualsEntity.transform;
             //pcam.Follow = clientPredictedEntity.gameObject.transform;
         }
 

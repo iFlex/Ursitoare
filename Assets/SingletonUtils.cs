@@ -12,6 +12,7 @@ namespace DefaultNamespace
         public static SingletonUtils instance;
         public static ClientPredictedEntity localCPE;
         public static MovingAverageInterpolator localVisInterpolator;
+        public static bool isPovCam = false;
         
         public LatencySimulation latencySim;
         public CinemachineCamera povCam;
@@ -40,9 +41,11 @@ namespace DefaultNamespace
         {
             if (Input.GetKeyDown(KeyCode.V))
             {
+                isPovCam = !isPovCam;
                 int p = povCam.Priority;
                 povCam.Priority = topCam.Priority;
                 topCam.Priority = p;
+                Debug.Log($"[SingletonUtils][CamSwap]");
             }
 
             if (Input.GetKeyDown(KeyCode.Alpha0))
