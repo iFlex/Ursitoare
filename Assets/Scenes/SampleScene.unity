@@ -275,7 +275,8 @@ MonoBehaviour:
   playerPrefab: {fileID: 4463793978811421536, guid: 958a66630925c9940af2679c406ba339, type: 3}
   autoCreatePlayer: 1
   playerSpawnMethod: 1
-  spawnPrefabs: []
+  spawnPrefabs:
+  - {fileID: 4463793978811421536, guid: 472f2f983e93c6e42b6195190ffd972f, type: 3}
   exceptionsDisconnect: 0
   snapshotSettings:
     bufferTimeMultiplier: 2
@@ -1370,6 +1371,7 @@ MonoBehaviour:
   manager: {fileID: 68771395}
   predictionManager: {fileID: 90500650}
   serverText: {fileID: 445369649}
+  sharedGOPrefab: {fileID: 4463793978811421536, guid: 472f2f983e93c6e42b6195190ffd972f, type: 3}
   reliable: 0
   resimCounter: 0
   sendRateMultiplier: 1

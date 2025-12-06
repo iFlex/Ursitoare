@@ -11,21 +11,23 @@ using UnityEngine;
 public abstract class PlayerController : NetworkBehaviour, PredictableComponent, PredictableControllableComponent
 {
     [SerializeField] protected Rigidbody rb;
-    [SerializeField] protected PredictedEntityVisuals pev;
     [SerializeField] protected Renderer renderer;
+    [SerializeField] protected bool isShared = false;
+    //TODO: 
+    [SerializeField] public PredictedNetworkBehaviour predictedMono; // { get; private set; }
     
-    public ClientPredictedEntity clientPredictedEntity;
-    public ServerPredictedEntity serverPredictedEntity;
     public CinemachineCamera pcam;
     public CinemachineCamera fcam;
     
     public static SafeEventDispatcher<PlayerController> spawned = new SafeEventDispatcher<PlayerController>();
     public static SafeEventDispatcher<PlayerController> despawned = new SafeEventDispatcher<PlayerController>();
-    public PredictedMonoBehaviour predictedMono;
     
     void Start()
     {
-        spawned.Dispatch(this);
+        if (isShared)
+        {
+            renderer.material.color = Color.red;
+        }
     }
 
     void OnDestroy()
@@ -43,46 +45,63 @@ public abstract class PlayerController : NetworkBehaviour, PredictableComponent,
         renderer.material.color = Color.yellow;
     }
 
-    public override void OnStartServer()
+    public void WireAsCtl()
     {
-        serverPredictedEntity = new ServerPredictedEntity(30, rb, gameObject, new PredictableControllableComponent[1]{this}, new PredictableComponent[1]{this});
-        serverPredictedEntity.gameObject = gameObject;
+        SingletonUtils.localCPE = predictedMono.clientPredictedEntity;
+        SetCamera(SingletonUtils.instance.povCam);
     }
     
-    public override void OnStartClient()
-    {
-        ConfigurePrediction(isOwned && !isServer);
-    }
-
     public override void OnStartAuthority()
     {
-        clientPredictedEntity.SetControlledLocally(isOwned);
-        SingletonUtils.localCPE = clientPredictedEntity;
-        SetCamera(SingletonUtils.instance.povCam);
+        WireAsCtl();
         Customize();
     }
 
-    protected virtual void ConfigurePrediction(bool detachVisuals)
-    {
-        clientPredictedEntity = new ClientPredictedEntity(30, rb, gameObject, new PredictableControllableComponent[1]{this}, new PredictableComponent[1]{this});
-        clientPredictedEntity.gameObject = gameObject;
-        pev.SetInterpolationProvider(new MovingAverageInterpolator());
-        pev.SetClientPredictedEntity(clientPredictedEntity, detachVisuals);
-        
-        SingletonUtils.localVisInterpolator = (MovingAverageInterpolator) pev.interpolationProvider;
-    }
-
+    private bool redy = false;
     private void Update()
     {
-        if (pcam && !pcam.Follow && clientPredictedEntity != null)
+        if (isOwned)
         {
-            pcam.Follow = pev.visualsEntity.transform;
-            SingletonUtils.instance.topCam.Follow = pev.visualsEntity.transform;
+            if (Input.GetKeyDown(KeyCode.Q))
+            {
+                RequestSwitchToSharedObj();   
+            }
+            if (Input.GetKeyDown(KeyCode.E))
+            {
+                RequestSwitchBack();
+            }
+        }
+        
+        if (!redy && predictedMono.isReady)
+        {
+            SingletonUtils.localVisInterpolator = (MovingAverageInterpolator) predictedMono.visuals.interpolationProvider;
+            spawned.Dispatch(this);
+            redy = true;
+        }
+        else
+        {
+            return;
+        }
+        
+        if (pcam && !pcam.Follow && predictedMono.clientPredictedEntity != null)
+        {
+            pcam.Follow = predictedMono.visuals.transform;
+            SingletonUtils.instance.topCam.Follow = predictedMono.visuals.transform;
         }
 
-        if (clientPredictedEntity != null && SingletonUtils.instance.clientText)
+        if (predictedMono.clientPredictedEntity != null && SingletonUtils.instance.clientText)
         {
-            SingletonUtils.instance.clientText.text = $"Tick:{clientPredictedEntity.totalTicks}\n ServerDelay:{clientPredictedEntity.GetServerDelay()}\n Resimulations:{clientPredictedEntity.totalResimulations}\n AvgResimLen:{clientPredictedEntity.GetAverageResimPerTick()} TotalResimSteps:{clientPredictedEntity.totalResimulationSteps}\n Skips:{clientPredictedEntity.totalSimulationSkips}\n Velo:{clientPredictedEntity.rigidbody.linearVelocity.magnitude}\n DistThres:{SingletonUtils.CURRENT_DECIDER.distResimThreshold}\n SmoothWindow:{SingletonUtils.localVisInterpolator.slidingWindowTickSize}\n FPS:{1/Time.deltaTime}\n FrameTime:{Time.deltaTime}";
+            SingletonUtils.instance.clientText.text = $"Tick:{predictedMono.clientPredictedEntity.totalTicks}\n " +
+                                                      $"ServerDelay:{predictedMono.clientPredictedEntity.GetServerDelay()}\n " +
+                                                      $"Resimulations:{predictedMono.clientPredictedEntity.totalResimulations}\n " +
+                                                      $"AvgResimLen:{predictedMono.clientPredictedEntity.GetAverageResimPerTick()} " +
+                                                      $"TotalResimSteps:{predictedMono.clientPredictedEntity.totalResimulationSteps}\n " +
+                                                      $"Skips:{predictedMono.clientPredictedEntity.totalSimulationSkips}\n " +
+                                                      $"Velo:{predictedMono.clientPredictedEntity.rigidbody.linearVelocity.magnitude}\n " +
+                                                      $"DistThres:{SingletonUtils.CURRENT_DECIDER.distResimThreshold}\n " +
+                                                      $"SmoothWindow:{SingletonUtils.localVisInterpolator.slidingWindowTickSize}\n " +
+                                                      $"FPS:{1/Time.deltaTime}\n " +
+                                                      $"FrameTime:{Time.deltaTime}";
         }
     }
     
@@ -97,4 +116,18 @@ public abstract class PlayerController : NetworkBehaviour, PredictableComponent,
     public abstract bool ValidateInput(float deltaTime, PredictionInputRecord input);
 
     public abstract void LoadInput(PredictionInputRecord input);
+
+    [Command]
+    void RequestSwitchToSharedObj(NetworkConnectionToClient conn = null)
+    {
+        Debug.Log($"[PlayerController][RequestSwitchToSharedObj]({netId}) conn={conn}");
+        PredictionMirrorBridge.Instance.SwitchOwnership(conn != null ? conn.connectionId : 0, PredictionMirrorBridge.Instance.sharedPredMono);
+    }
+    
+    [Command]
+    void RequestSwitchBack(NetworkConnectionToClient conn = null)
+    {
+        Debug.Log($"[PlayerController][RequestSwitchBack]({netId}) conn={conn}");
+        PredictionMirrorBridge.Instance.SwitchOwnership(conn != null ? conn.connectionId : 0, PredictionMirrorBridge.Instance.GetOriginalOwnedObject(conn.connectionId));
+    }
 }

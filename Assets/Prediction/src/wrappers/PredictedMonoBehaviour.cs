@@ -7,6 +7,8 @@ namespace Prediction.wrappers
     [RequireComponent(typeof(PredictedEntityVisuals))]
     public class PredictedMonoBehaviour : MonoBehaviour
     {
+        //FUDO: can we make components serializable?
+        [SerializeField] private MonoBehaviour[] components;
         [SerializeField] private int bufferSize;
         [SerializeField] private Rigidbody _rigidbody;
         [SerializeField] private PredictedEntityVisuals visuals;
@@ -22,18 +24,16 @@ namespace Prediction.wrappers
 
         void ConfigureAsServer()
         {
-            //TODO: detect or wire components
-            serverPredictedEntity = new ServerPredictedEntity(bufferSize, _rigidbody, visuals.gameObject, new PredictableControllableComponent[0], new PredictableComponent[0]);
+            serverPredictedEntity = new ServerPredictedEntity(bufferSize, _rigidbody, visuals.gameObject, WrapperHelpers.GetControllableComponents(components), WrapperHelpers.GetComponents(components));
         }
 
         void ConfigureAsClient(bool controlledLocally)
         {
             //TODO: detect or wire components
-            clientPredictedEntity = new ClientPredictedEntity(30, _rigidbody, visuals.gameObject, new PredictableControllableComponent[0]{}, new PredictableComponent[0]{});
+            clientPredictedEntity = new ClientPredictedEntity(30, _rigidbody, visuals.gameObject, WrapperHelpers.GetControllableComponents(components), WrapperHelpers.GetComponents(components));
             clientPredictedEntity.gameObject = gameObject;
-            //TODO: configurable
-            visuals.SetInterpolationProvider(new MovingAverageInterpolator());
-            visuals.SetClientPredictedEntity(clientPredictedEntity, visuals);
+            //TODO: configurable interpolator
+            visuals.SetClientPredictedEntity(clientPredictedEntity, new MovingAverageInterpolator());
         }
 
         public bool IsControlledLocally()
@@ -48,11 +48,16 @@ namespace Prediction.wrappers
             visuals.Reset();
             clientPredictedEntity?.SetControlledLocally(controlledLocally);
         }
-        
-        public void Reset()
+
+        public void ResetClient()
         {
             visuals.Reset();
             clientPredictedEntity?.Reset();
+        }
+        
+        public void Reset()
+        {
+            ResetClient();
             serverPredictedEntity?.Reset();
         }
     }

@@ -68,6 +68,12 @@ namespace Prediction.Interpolation
             if (!interpStarted)
             {
                 psr = GetInterpolationStartState();
+                if (psr == null)
+                {
+                    Debug.Log($"[LERP]({debugCounterLocal}) WARNING. no data");
+                    return;
+                }
+                
                 time = GetTime(psr);
                 interpStarted = true;
                 pervTick = psr.tickId;
@@ -75,12 +81,18 @@ namespace Prediction.Interpolation
             else
             {
                 psr = GetNextInterpolationTarget(time);
+                if (psr == null)
+                {
+                    Debug.Log($"[LERP]({debugCounterLocal}) WARNING. no data");
+                    return;
+                }
+                
                 double targetTime = GetTime(psr);
                 interpolationProgress = (float)((targetTime - time) / tickInterval);
                 uint delta = psr.tickId - pervTick;
                 if (delta > 1)
                 {
-                    Debug.Log($"[LERP]({debugCounterLocal}) WARNING. Smooth Lerb skipped {delta} ticks.");
+                    //Debug.Log($"[LERP]({debugCounterLocal}) WARNING. Smooth Lerb skipped {delta} ticks.");
                 }
                 pervTick = psr.tickId;
                 //Debug.Log($"[LERP]({debugCounterLocal}) time:{time} targetTime:{targetTime} ttik:{psr.tickId} it:{interpolationProgress}  tickInterval:{tickInterval} deltaTime:{Time.deltaTime}");

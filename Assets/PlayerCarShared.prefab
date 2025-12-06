@@ -228,9 +228,9 @@ GameObject:
   - component: {fileID: 5756400233978040421}
   - component: {fileID: 2786243932360149106}
   - component: {fileID: 6699726022370081141}
-  - component: {fileID: 5765951825069291079}
+  - component: {fileID: 2124725868999012484}
   m_Layer: 0
-  m_Name: PlayerCar
+  m_Name: PlayerCarShared
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -317,8 +317,8 @@ MonoBehaviour:
   syncInterval: 0
   rb: {fileID: 1526699890830082510}
   renderer: {fileID: 2143821587615101182}
-  isShared: 0
-  predictedMono: {fileID: 5765951825069291079}
+  isShared: 1
+  predictedMono: {fileID: 2124725868999012484}
   pcam: {fileID: 0}
   fcam: {fileID: 2577150116825213703}
   powerMagnitude: 5
@@ -337,7 +337,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   sceneId: 0
-  _assetId: 4191876620
+  _assetId: 3083439407
   serverOnly: 0
   visibility: 0
   hasSpawned: 0
@@ -361,7 +361,7 @@ MonoBehaviour:
   currentTimeStep: 0
   targetTime: 0
   artifficialDelay: 1
---- !u!114 &5765951825069291079
+--- !u!114 &2124725868999012484
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}

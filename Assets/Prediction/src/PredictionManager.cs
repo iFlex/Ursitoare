@@ -191,7 +191,7 @@ namespace Prediction
             }
             
             physicsController.Simulate();
-            if (isClient && localEntity != null)
+            if (localEntity != null)
             {
                 localEntity.SamplePhysicsState(tickId);
             }

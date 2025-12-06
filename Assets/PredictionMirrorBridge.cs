@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Mirror;
 using Prediction;
 using Prediction.data;
@@ -12,16 +11,24 @@ namespace DefaultNamespace
     //TODO: problem 1: why is the ball moving differently on the client vs server when rotation is fixed?
     public class PredictionMirrorBridge : NetworkBehaviour
     {
+        public static PredictionMirrorBridge Instance;
         //TODO: configurable fake server latency in tick counts to test high ping scenarios
         //TODO: track owner connection of client
-        
+
         public static bool MSG_DEBUG = false;
         public static bool PRED_DEBUG = false;
 
         public NetworkManager manager;
         [SerializeField] PredictionManager predictionManager;
         [SerializeField] private TMPro.TMP_Text serverText;
-        private Dictionary<int, PredictedMonoBehaviour> ownership = new Dictionary<int, PredictedMonoBehaviour>();
+        [SerializeField] private GameObject sharedGOPrefab;
+        public GameObject sharedGO;
+        public PredictedNetworkBehaviour sharedPredMono;
+        public PredictedNetworkBehaviour localPredMono;
+        
+        private Dictionary<int, PredictedNetworkBehaviour> originalOwnership = new Dictionary<int, PredictedNetworkBehaviour>();
+        private Dictionary<int, PredictedNetworkBehaviour> ownership = new Dictionary<int, PredictedNetworkBehaviour>();
+        private Dictionary<PredictedNetworkBehaviour, int> entityToOwner = new Dictionary<PredictedNetworkBehaviour, int>();
         
         public bool reliable = false;
         public int resimCounter = 0;
@@ -31,11 +38,12 @@ namespace DefaultNamespace
         private DebugResimChecker resimulationDecider = new DebugResimChecker();
         private void Awake()
         {
+            Instance = this;
             //TODO: offer auto wiring for this in module
             PlayerController.spawned.AddEventListener(OnSpawned);
             PlayerController.despawned.AddEventListener(OnDespawned);
         }
-
+        
         private void OnDestroy()
         {
             //TODO: offer auto wiring for this in module
@@ -96,6 +104,10 @@ namespace DefaultNamespace
                         //SendTargetedReportFromServerUnreliable(entityNetId, serverTick, data);
                     }
                 };
+                
+                sharedGO = Instantiate(sharedGOPrefab, Vector3.one, Quaternion.identity);
+                sharedPredMono = sharedGO.GetComponent<PredictedNetworkBehaviour>();
+                NetworkServer.Spawn(sharedGO);
             }
         }
 
@@ -103,36 +115,43 @@ namespace DefaultNamespace
         {
             if (isServer)
             {
-                predictionManager.AddPredictedEntity(entity.netId, entity.serverPredictedEntity);   
-                predictionManager.SetEntityOwner(entity.serverPredictedEntity, entity.netIdentity.connectionToClient.connectionId);
+                int connId = entity.netIdentity.connectionToClient == null ? 0 : entity.netIdentity.connectionToClient.connectionId;
+                predictionManager.AddPredictedEntity(entity.netId, entity.predictedMono.serverPredictedEntity);   
+                predictionManager.SetEntityOwner(entity.predictedMono.serverPredictedEntity, connId);
 
-                if (!entity.isOwned)
+                if (entity.gameObject != sharedPredMono.gameObject)
                 {
-                    ownership[entity.netIdentity.connectionToClient.connectionId] = entity.predictedMono;   
-                    entity.predictedMono.Reset();
+                    ownership[connId] = entity.predictedMono;   
+                    originalOwnership[connId] = entity.predictedMono;
+                    entityToOwner[entity.predictedMono] = connId;
+                }
+                if (entity.isOwned)
+                {
+                    localPredMono = entity.predictedMono;
                 }
             }
-            if (isClient && entity.clientPredictedEntity != null)
+            if (isClient && entity.predictedMono.clientPredictedEntity != null)
             {
-                predictionManager.AddPredictedEntity(entity.netId, entity.clientPredictedEntity);
+                predictionManager.AddPredictedEntity(entity.netId, entity.predictedMono.clientPredictedEntity);
                 if (entity.netIdentity.isOwned)
                 {
-                    predictionManager.SetLocalEntity(entity.netIdentity.netId, entity.clientPredictedEntity);
+                    localPredMono = entity.predictedMono;
+                    predictionManager.SetLocalEntity(entity.netIdentity.netId, entity.predictedMono.clientPredictedEntity);
                     //TODO: handle character change...
-                    entity.clientPredictedEntity.predictionAcceptable.AddEventListener(b =>
+                    entity.predictedMono.clientPredictedEntity.predictionAcceptable.AddEventListener(b =>
                     {
                         if (b)
                         {
                             //Debug.Log($"[Prediction][PredictionAcceptable]");
                         }
                     });
-                    entity.clientPredictedEntity.resimulation.AddEventListener(b =>
+                    entity.predictedMono.clientPredictedEntity.resimulation.AddEventListener(b =>
                     {
                         if (b)
                         {
                             resimCounter++;
                             if (PRED_DEBUG)
-                                Debug.Log($"[Prediction][ResimulationStart]({resimCounter}) tickId:{entity.clientPredictedEntity.GetTotalTicks()} avgResim:{entity.clientPredictedEntity.GetAverageResimPerTick()}");
+                                Debug.Log($"[Prediction][ResimulationStart]({resimCounter}) tickId:{entity.predictedMono.clientPredictedEntity.GetTotalTicks()} avgResim:{entity.predictedMono.clientPredictedEntity.GetAverageResimPerTick()}");
                         }
                     });
                 }
@@ -144,12 +163,12 @@ namespace DefaultNamespace
         {
             if (isServer)
             {
-                predictionManager.RemovePredictedEntity(entity.serverPredictedEntity);  
+                predictionManager.RemovePredictedEntity(entity.predictedMono.serverPredictedEntity);  
             }
             if (isClient)
             {
                 predictionManager.RemovePredictedEntity(entity.netId);
-                if (predictionManager.GetLocalEntity() == entity.clientPredictedEntity)
+                if (predictionManager.GetLocalEntity() == entity.predictedMono.clientPredictedEntity)
                 {
                     predictionManager.SetLocalEntity(0, null);
                 }
@@ -230,6 +249,59 @@ namespace DefaultNamespace
             
             data.tmpServerTime = NetworkClient.connection.remoteTimeStamp;
             predictionManager.OnFollowerServerStateReceived(entityNetId, data);
+        }
+
+        public PredictedNetworkBehaviour GetOriginalOwnedObject(int connectionId)
+        {
+            return originalOwnership.GetValueOrDefault(connectionId, null);
+        }
+
+        public PredictedNetworkBehaviour GetOwnerObject(int connectionId)
+        {
+            return ownership.GetValueOrDefault(connectionId, null);
+        }
+        
+        [Server]
+        public void SwitchOwnership(int connectionId, PredictedNetworkBehaviour newObject)
+        {
+            if (entityToOwner.ContainsKey(newObject))
+            {
+                Debug.Log($"[PredictionMirrorBridge][SwitchOwnership] BUSY conn:{connectionId} newObj:{newObject}");
+                return;
+            }
+            
+            PredictedNetworkBehaviour pnb = GetOwnerObject(connectionId);
+            pnb.SetControlledLocally(false);
+            entityToOwner.Remove(pnb);
+            
+            Debug.Log($"[PredictionMirrorBridge][SwitchOwnership] conn:{connectionId} oldObj:{pnb} newObj:{newObject}");
+            
+            //NOTE, since this is just for show, set it to some stupid number
+            predictionManager.SetEntityOwner(pnb.serverPredictedEntity, 9999);
+
+            ownership[connectionId] = newObject;
+            entityToOwner[newObject] = connectionId;
+            newObject.Reset();
+            
+            if (newObject == sharedPredMono && newObject.clientPredictedEntity == null)
+            {
+                Debug.Log($"[PredictionMirrorBridge][SwitchOwnership][SERVER_INIT] connId:{connectionId}");
+                newObject.OnStartAuthority();
+                newObject.gameObject.GetComponent<PlayerController>().WireAsCtl();
+            }
+            predictionManager.SetEntityOwner(newObject.serverPredictedEntity, connectionId);
+            UpdateControlledObject(NetworkServer.connections[connectionId], newObject);
+        }
+
+        [TargetRpc]
+        public void UpdateControlledObject(NetworkConnectionToClient conn, PredictedNetworkBehaviour newObj)
+        {
+            Debug.Log($"[PredictionMirrorBridge][UpdateControlledObject] conn:{conn} newObj:{newObj} currentObj:{localPredMono}");
+            localPredMono.Reset();
+            
+            localPredMono = newObj;
+            localPredMono.SetControlledLocally(true);
+            predictionManager.SetLocalEntity(newObj.netId, newObj.clientPredictedEntity);
         }
     }
 }

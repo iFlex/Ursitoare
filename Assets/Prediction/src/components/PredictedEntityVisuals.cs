@@ -23,26 +23,19 @@ namespace Prediction
         public double targetTime = 0;
         public double artifficialDelay = 1f;
         private bool visualsDetached = false;
-
-        public void SetInterpolationProvider(VisualsInterpolationsProvider provider)
+        
+        public void SetClientPredictedEntity(ClientPredictedEntity clientPredictedEntity, VisualsInterpolationsProvider provider)
         {
             interpolationProvider = provider;
-            hasVIP = interpolationProvider != null;
-        }
-        
-        public void SetClientPredictedEntity(ClientPredictedEntity clientPredictedEntity, bool detachVisuals)
-        {
             this.clientPredictedEntity = clientPredictedEntity;
+            //TODO: what? why artifficial delay?
             currentTimeStep -= artifficialDelay;
             
             //TODO: listen for destruction events
-            if (detachVisuals)
-            {
-                visualsDetached = true;
-                visualsEntity.transform.SetParent(null);
-            }
+            visualsDetached = true;
+            visualsEntity.transform.SetParent(null);
             
-            interpolationProvider?.SetInterpolationTarget(visualsEntity.transform);
+            interpolationProvider.SetInterpolationTarget(visualsEntity.transform);
             if (debug)
             {
                 serverGhost = Instantiate(serverGhostPrefab, Vector3.zero, Quaternion.identity);
@@ -54,7 +47,8 @@ namespace Prediction
 
         void AggregateState(PhysicsStateRecord state)
         {
-            interpolationProvider?.Add(state);
+            //Debug.Log($"[PredictedEntityVisuals]({GetInstanceID()}) state: {state}");
+            interpolationProvider.Add(state);
         }
 
         private PhysicsStateRecord rec;
@@ -68,25 +62,16 @@ namespace Prediction
             if (!visualsDetached)
                 return;
 
-            rec = clientPredictedEntity.serverStateBuffer.GetEnd();
             if (debug)
             {
+                rec = clientPredictedEntity.serverStateBuffer.GetEnd();
                 if (rec != null && serverGhost)
                 {
                     serverGhost.transform.position = rec.position;
                     serverGhost.transform.rotation = rec.rotation;   
                 }
             }
-            
-            if (clientPredictedEntity.isControlledLocally)
-            {
-                interpolationProvider.Update(Time.deltaTime);
-            }
-            else
-            {
-                transform.position = rec.position;
-                transform.rotation = rec.rotation;
-            }
+            interpolationProvider.Update(Time.deltaTime);
         }
 
         public void Reset()

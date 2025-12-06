@@ -1,29 +1,91 @@
-﻿using UnityEngine;
+﻿using Mirror;
+using Prediction.Interpolation;
+using UnityEngine;
 
 namespace Prediction.wrappers
 {
     [RequireComponent(typeof(Rigidbody))]
     [RequireComponent(typeof(PredictedEntityVisuals))]
-    public class PredictedNetworkBehaviour : MonoBehaviour
+    public class PredictedNetworkBehaviour : NetworkBehaviour
     {
+        //FUDO: can we make components serializable?
+        [SerializeField] private MonoBehaviour[] components;
         [SerializeField] private int bufferSize;
         [SerializeField] private Rigidbody _rigidbody;
-        [SerializeField] private PredictedEntityVisuals visuals;
+        //TODO: private set but serializable...
+        public PredictedEntityVisuals visuals;// { get; private set; }
         
         public ClientPredictedEntity clientPredictedEntity { get; private set; }
         public ServerPredictedEntity serverPredictedEntity { get; private set; }
+        public bool isReady { get; private set; }
         
-        void Awake()
+        public override void OnStartServer()
         {
-            //TODO
-            //TODO: use common methods instead of duplicating the code here...
+            ConfigureAsServer();
+            isReady = true;
+        }
+    
+        public override void OnStartClient()
+        {
+            if (isServer)
+            {
+                return;
+            }
+            
+            ConfigureAsClient(isOwned);
+            if (!isOwned)
+            {
+                isReady = true;
+            }
+        }
+
+        public override void OnStartAuthority()
+        {
+            if (isServer)
+            {
+                ConfigureAsClient(true);
+            }
+            clientPredictedEntity.SetControlledLocally(isOwned);
+            isReady = true;
+        }
+
+        //TODO: use common methods instead of duplicating the code here...
+        void ConfigureAsServer()
+        {
+            serverPredictedEntity = new ServerPredictedEntity(bufferSize, _rigidbody, visuals.gameObject, WrapperHelpers.GetControllableComponents(components), WrapperHelpers.GetComponents(components));
+        }
+
+        void ConfigureAsClient(bool controlledLocally)
+        {
+            clientPredictedEntity = new ClientPredictedEntity(30, _rigidbody, visuals.gameObject, WrapperHelpers.GetControllableComponents(components), WrapperHelpers.GetComponents(components));
+            clientPredictedEntity.SetControlledLocally(controlledLocally);
+            //TODO: configurable interpolator
+            visuals.SetClientPredictedEntity(clientPredictedEntity, new MovingAverageInterpolator());
+        }
+        
+        public bool IsControlledLocally()
+        {
+            if (clientPredictedEntity == null)
+                return true;
+            return clientPredictedEntity.isControlledLocally;
+        }
+        
+        public void SetControlledLocally(bool controlledLocally)
+        {
+            visuals.Reset();
+            clientPredictedEntity?.SetControlledLocally(controlledLocally);
+        }
+
+        public void ResetClient()
+        {
+            visuals.Reset();
+            clientPredictedEntity?.Reset();
         }
         
         public void Reset()
         {
-            clientPredictedEntity?.Reset();
+            ResetClient();
             serverPredictedEntity?.Reset();
-            visuals.Reset();
         }
     }
 }

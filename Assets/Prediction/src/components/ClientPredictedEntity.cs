@@ -44,6 +44,7 @@ namespace Prediction
         public ClientPredictedEntity(int bufferSize, Rigidbody rb, GameObject visuals, PredictableControllableComponent[] controllablePredictionContributors, PredictableComponent[] predictionContributors) : base(rb, visuals, controllablePredictionContributors, predictionContributors)
         {
             rigidbody = rb;
+            gameObject = rb.gameObject;
             detachedVisualsIdentity = visuals;
             
             localInputBuffer = new RingBuffer<PredictionInputRecord>(bufferSize);
@@ -133,11 +134,11 @@ namespace Prediction
         {
             if (AddServerState(lastAppliedFollowerTick, lastArrivedServerState))
             {
+                SnapTo(serverStateBuffer.GetEnd());
                 if (!isControlledLocally)
                 {
                     newInterpolationStateReached.Dispatch(lastArrivedServerState);
                 }
-                SnapTo(serverStateBuffer.GetEnd());
             }
             lastAppliedFollowerTick = serverStateBuffer.GetEndTick();
         }
@@ -280,7 +281,7 @@ namespace Prediction
             localStateBuffer.Clear();
             serverStateBuffer.Clear();
             lastAppliedFollowerTick = 0;
-            
+            isControlledLocally = false;
             //TODO: consider if this is needed? it probably is
             //interpolationsProvider.Clear();
             
