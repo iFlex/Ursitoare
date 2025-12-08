@@ -68,7 +68,7 @@ namespace Prediction.wrappers
         {
             if (isServer)
             {
-                ConfigureAsClient(true);
+                ConfigureAsServerClient(true);
             }
             
             SetControlledLocally(true);
@@ -84,7 +84,13 @@ namespace Prediction.wrappers
         void ConfigureAsClient(bool controlledLocally)
         {
             clientPredictedEntity = new ClientPredictedEntity(30, _rigidbody, visuals.gameObject, WrapperHelpers.GetControllableComponents(components), WrapperHelpers.GetComponents(components));
+            SetControlledLocally(controlledLocally);
             visuals.SetClientPredictedEntity(clientPredictedEntity, PredictionManager.INTERPOLATION_PROVIDER());
+        }
+
+        void ConfigureAsServerClient(bool controlledLocally)
+        {
+            clientPredictedEntity = new ClientPredictedEntity(30, _rigidbody, visuals.gameObject, WrapperHelpers.GetControllableComponents(components), WrapperHelpers.GetComponents(components));
             SetControlledLocally(controlledLocally);
         }
         

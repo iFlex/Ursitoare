@@ -1,4 +1,5 @@
-﻿using Prediction.data;
+﻿using System;
+using Prediction.data;
 using Prediction.Interpolation;
 using UnityEngine;
 
@@ -23,7 +24,8 @@ namespace Prediction
         public double targetTime = 0;
         public double artifficialDelay = 1f;
         private bool visualsDetached = false;
-        
+
+        //NOTE: never call this on the server
         public void SetClientPredictedEntity(ClientPredictedEntity clientPredictedEntity, VisualsInterpolationsProvider provider)
         {
             interpolationProvider = provider;
