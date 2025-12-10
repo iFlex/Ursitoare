@@ -320,6 +320,7 @@ namespace Prediction.Tests
         }
         
         //TODO: test buffer too big, skip ahead...
+        //TODO: test buffer keeps enlarging, skip ahead?
     }
 }
 #endif

@@ -309,7 +309,8 @@ namespace Prediction.Tests
             Assert.AreEqual(33, entity.totalResimulations);
         }
         
-        //TODO: test slowdown to catch server? or snap?
+        //TODO: test follow server
+        //TODO: test blend with follow server
     }
 }
 #endif

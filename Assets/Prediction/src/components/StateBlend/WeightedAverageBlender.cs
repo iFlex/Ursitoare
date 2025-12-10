@@ -10,7 +10,7 @@ namespace Prediction.StateBlend
             //ONLY IF NEEDED
         }
 
-        public void BlendStep(ClientPredictedEntity.FollowerState state, RingBuffer<PhysicsStateRecord> blendedStateBuffer, RingBuffer<PhysicsStateRecord> followerStateBuffer,
+        public bool BlendStep(ClientPredictedEntity.FollowerState state, RingBuffer<PhysicsStateRecord> blendedStateBuffer, RingBuffer<PhysicsStateRecord> followerStateBuffer,
             TickIndexedBuffer<PhysicsStateRecord> serverStateBuffer)
         {
             float serverBias = ((float)state.tickId) / state.overlapWithAuthorityEnd;
@@ -20,6 +20,13 @@ namespace Prediction.StateBlend
             int prevTick = (int) state.tickId - 1;
             PhysicsStateRecord prevState = followerStateBuffer.Get(prevTick); 
             blendedStateBuffer.Get((int)state.tickId).From(prevState, state.tickId);
+            //TODO
+            return false;
+        }
+
+        public void SetSmoothingFactor(float factor)
+        {
+            //TODO - modify window based on this.
         }
     }
 }

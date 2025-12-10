@@ -110,11 +110,11 @@ namespace Prediction.wrappers
         
         private void OnCollisionEnter(Collision other)
         {
-            if (IsClient() && !IsServer())
+            if (PredictionManager.Instance.IsPredicted(other.rigidbody))
             {
-                //TODO: determine if other is predicted too
-                //GetClientEntity().MarkInteractionWithLocalAuthority();
+                GetClientEntity().MarkInteractionWithLocalAuthority();
             }
         }
+        //TODO: on collision stay?
     }
 }

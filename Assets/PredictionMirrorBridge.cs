@@ -60,21 +60,24 @@ namespace DefaultNamespace
             
             if (Input.GetKeyDown(KeyCode.X) && sharedPredMono)
             {
-                Debug.Log("[FAKE_IT_TILL_YOU_TEST_IT]");
-                ((PredictedEntity)sharedPredMono).ApplyClientForce(rb => rb.AddForce(Vector3.left * 5));
+                ((PredictedEntity)sharedPredMono).ApplyClientForce(rb =>
+                {
+                    Debug.Log($"[FAKE_IT_TILL_YOU_TEST_IT] (goID:{rb.gameObject.GetInstanceID()})");
+                    rb.AddForce(Vector3.left * 5000);
+                });
             }
         }
 
         private SimplePhysicsControllerKinematic ktl;
         private void Start()
         {
-            PhysicsController ctl = new SimplePhysicsController();
-            predictionManager.Setup(isServer, isClient, ctl);
+            //PhysicsController ctl = new SimplePhysicsController();
+            //predictionManager.Setup(isServer, isClient, ctl);
 
-            //ktl = new SimplePhysicsControllerKinematic();
-            //predictionManager.Setup(isServer, isClient, ktl);
+            ktl = new SimplePhysicsControllerKinematic();
+            predictionManager.Setup(isServer, isClient, ktl);
             ktl?.DetectAllBodies();
-            predictionManager.roundTripTimeGetter = () => NetworkTime.rtt;
+            PredictionManager.ROUND_TRIP_GETTER = () => NetworkTime.rtt;
             if (isClient)
             {
                 predictionManager.clientStateSender = (tickId, data) =>

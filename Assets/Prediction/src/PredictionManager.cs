@@ -17,6 +17,7 @@ namespace Prediction
         public static PredictionManager Instance;
         public static Func<VisualsInterpolationsProvider> INTERPOLATION_PROVIDER = () => new MovingAverageInterpolator();
         public static SingleSnapshotInstanceResimChecker SNAPSHOT_INSTANCE_RESIM_CHECKER = new SimpleConfigurableResimulationDecider();
+        public static Func<double> ROUND_TRIP_GETTER;
         
         [SerializeField] private GameObject localGO;
         private ClientPredictedEntity localEntity;
@@ -28,6 +29,7 @@ namespace Prediction
         private Dictionary<ServerPredictedEntity, int> _entityToOwnerConnId = new Dictionary<ServerPredictedEntity, int>();
         private Dictionary<int, ServerPredictedEntity> _connIdToEntity = new Dictionary<int, ServerPredictedEntity>();
         private Dictionary<uint, ClientPredictedEntity> _clientEntities = new Dictionary<uint, ClientPredictedEntity>();
+        private HashSet<GameObject> _predictedEntities = new HashSet<GameObject>();
         
         private bool isClient;
         private bool isServer;
@@ -38,7 +40,6 @@ namespace Prediction
         
         public Action<uint, PredictionInputRecord>       clientStateSender;
         public Action<uint, uint, PhysicsStateRecord>    serverStateSender;
-        public Func<double> roundTripTimeGetter;
         
         private void Awake()
         {
@@ -84,6 +85,7 @@ namespace Prediction
             
             _serverEntityToId[entity] = id;
             _idToServerEntity[id] = entity;
+            _predictedEntities.Add(entity.gameObject);
             if (DEBUG)
                 Debug.Log($"[PredictionManager][AddPredictedEntity] SERVER ({id})=>({entity})");
         }
@@ -101,9 +103,10 @@ namespace Prediction
                 _serverEntityToId.Remove(entity);
                 _idToServerEntity.Remove(id);
             }
+            
             _serverEntityToId.Remove(entity);
             _entityToOwnerConnId.Remove(entity);
-            
+            _predictedEntities.Remove(entity.gameObject);
             if (DEBUG)
                 Debug.Log($"[PredictionManager][RemovePredictedEntity] entity:{entity}");
         }
@@ -116,6 +119,17 @@ namespace Prediction
                 Debug.Log($"[PredictionManager][AddPredictedEntity] CLIENT ({id})=>({entity})");
             
             _clientEntities[id] = entity;
+            _predictedEntities.Add(entity.gameObject);
+        }
+
+        public bool IsPredicted(GameObject entity)
+        {
+            return _predictedEntities.Contains(entity);
+        }
+
+        public bool IsPredicted(Rigidbody entity)
+        {
+            return _predictedEntities.Contains(entity.gameObject);
         }
 
         public void RemovePredictedEntity(uint id)
@@ -123,7 +137,9 @@ namespace Prediction
             if (DEBUG)
                 Debug.Log($"[PredictionManager][RemovePredictedEntity]({id})");
             
+            ClientPredictedEntity ent = _clientEntities.GetValueOrDefault(id, null);
             _clientEntities.Remove(id);
+            _predictedEntities.Remove(ent.gameObject);
             if (id == localEntityId)
             {
                 UnsetLocalEntity(id);
@@ -307,9 +323,9 @@ namespace Prediction
             entity?.BufferClientTick(clientTickId, tickInputRecord);
         }
 
-        public uint GetServerTickDelay()
+        public static uint GetServerTickDelay()
         {
-            return (uint) Mathf.CeilToInt((float)(roundTripTimeGetter() / Time.fixedDeltaTime));
+            return (uint) Mathf.CeilToInt((float)(ROUND_TRIP_GETTER() / Time.fixedDeltaTime));
         }
         
         public struct EntityProcessingError

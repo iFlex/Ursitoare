@@ -161,11 +161,13 @@ namespace Prediction.wrappers
         {
             if (IsClient() && !IsServer())
             {
-                //TODO: determine if other is predicted too
-                //GetClientEntity().MarkInteractionWithLocalAuthority();
+                if (PredictionManager.Instance.IsPredicted(other.rigidbody))
+                {
+                    Debug.Log($"[PredictedNetworkBehaviour][OnCollisionEnter] this:{gameObject}({gameObject.GetInstanceID()}) other:{other}:({other.rigidbody})::{other.rigidbody.gameObject.GetInstanceID()}");
+                    GetClientEntity().MarkInteractionWithLocalAuthority();
+                }
             }
         }
-        
         //TODO: on collision stay?
 
         void Update()

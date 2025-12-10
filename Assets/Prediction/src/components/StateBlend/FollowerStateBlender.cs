@@ -6,8 +6,9 @@ namespace Prediction.StateBlend
     public interface FollowerStateBlender
     {
         void Reset();
-        void BlendStep(ClientPredictedEntity.FollowerState state, RingBuffer<PhysicsStateRecord> blendedStateBuffer,
+        bool BlendStep(ClientPredictedEntity.FollowerState state, RingBuffer<PhysicsStateRecord> blendedStateBuffer,
             RingBuffer<PhysicsStateRecord> followerStateBuffer,
             TickIndexedBuffer<PhysicsStateRecord> serverStateBuffer);
+        void SetSmoothingFactor(float factor);
     }
 }

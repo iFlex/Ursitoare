@@ -139,15 +139,13 @@ namespace Prediction
             {
                 if (followerState.lastAppliedServerTick < serverStateBuffer.GetEndTick())
                 {
-                    if (DEBUG)
-                        Debug.Log($"[ClientPredictedEntity][Blend][ClientFollowerSimulationTick]({gameObject.GetInstanceID()}) FOLLOW_SERVER");
                     SnapTo(serverStateBuffer.GetEnd());
                     followerState.lastAppliedServerTick = serverStateBuffer.GetEndTick();
                     followerState.tickId = followerState.lastAppliedServerTick;
+                    if (DEBUG)
+                        Debug.Log($"[ClientPredictedEntity][Blend][ClientFollowerSimulationTick]({gameObject.GetInstanceID()}) FOLLOW_SERVER tickId:{followerState.tickId} data:{serverStateBuffer.GetEnd()}");
                 }
             }
-            //Simulate
-            //Sample
         }
 
         PredictionInputRecord SampleInput(uint tickId)
@@ -180,6 +178,7 @@ namespace Prediction
             {
                 stateData = followerStateBuffer.Get((int)followerState.tickId);
                 PopulatePhysicsStateRecord(followerState.tickId, stateData);
+                Debug.Log($"[ClientPredictedEntity][SamplePhysicsState] ({gameObject.GetInstanceID()}) tickId:{followerState.tickId} PhysicsSampled:{stateData}");
                 //TODO: can we reuse the localStateBuffer? it's a waste to have a completely separate one...
                 followerState.Sample();
             }
@@ -200,7 +199,7 @@ namespace Prediction
         public void BufferServerTick(uint lastAppliedTick, PhysicsStateRecord serverState)
         {
             if (DEBUG)
-                Debug.Log($"[ClientPredictedEntity][BufferServerTick] lastTick:{lastAppliedTick}  serverState:{serverState}");
+                Debug.Log($"[ClientPredictedEntity][BufferServerTick](goId:{gameObject.GetInstanceID()}) lastTick:{lastAppliedTick}  serverState:{serverState}");
             if (AddServerState(lastAppliedTick, serverState))
             {
                 //NOTE: somehow the server reports are in the future. Don't resimulate until we get there too
@@ -355,15 +354,21 @@ namespace Prediction
 
         public uint totalInteractionsWithLocalAuthority = 0;
         public uint totalBlendedFollowerTicks = 0;
+        public bool subsequentCollisionsExtendInterval = false;
+        public uint blendIntervalMultiplier = 2;
+        
         //NOTE: external entry point
         public void MarkInteractionWithLocalAuthority()
         {
             if (!predictFollowers)
                 return;
+
+            if (!subsequentCollisionsExtendInterval && followerState.overlappingWithLocalAuthority)
+                return;
             
             //TODO: wire this getter in or wire in the prediction manager (however that's coupling)
-            uint serverLatencyInTicks = PredictionManager.Instance.GetServerTickDelay();
-            Debug.Log($"[ClientPredictedEntity][Blend][MarkInteractionWithLocalAuthority] delay:{serverLatencyInTicks} goID:{gameObject.GetInstanceID()} totalInter:{totalInteractionsWithLocalAuthority}");
+            uint serverLatencyInTicks = PredictionManager.GetServerTickDelay() * blendIntervalMultiplier;
+            Debug.Log($"[ClientPredictedEntity][Blend][MarkInteractionWithLocalAuthority](goId:{gameObject.GetInstanceID()}) delay:{serverLatencyInTicks} totalInter:{totalInteractionsWithLocalAuthority} tickId:{followerState.tickId}");
             
             followerState.overlapWithAuthorityStart = followerState.tickId;
             followerState.overlapWithAuthorityEnd = followerState.tickId + serverLatencyInTicks;
@@ -379,7 +384,7 @@ namespace Prediction
         bool TickOverlapWithAuthority()
         {
             if (DEBUG)
-                Debug.Log($"[ClientPredictedEntity][Blend][TickOverlapWithAuthority][1]({gameObject.GetInstanceID()})");
+                Debug.Log($"[ClientPredictedEntity][Blend][TickOverlapWithAuthority][1](goId:{gameObject.GetInstanceID()}) overlapping:{followerState.overlappingWithLocalAuthority} tickId:{followerState.tickId} end:{followerState.overlapWithAuthorityEnd}");
 
             //TODO: figure out when the physics engine applies the collision forces, to make sure we don't overwrite them with this algorithm but rather
             //sample those forces and blend with server!!!
@@ -395,15 +400,21 @@ namespace Prediction
             totalBlendedFollowerTicks++;
             if (followerStateBlender != null && followerState.tickId != followerState.overlapWithAuthorityStart)
             {
-                //TODO: check if we just need to exit
-                followerStateBlender.BlendStep(followerState, blendedFollowStateBuffer, followerStateBuffer, serverStateBuffer);
-                PhysicsStateRecord record = blendedFollowStateBuffer.Get((int) followerState.tickId);
-                SnapTo(record);
-                Debug.Log($"[ClientPredictedEntity][Blend][TickOverlapWithAuthority][2] BlendedTick({record}) tickId:{followerState.tickId}");
+                if (followerStateBlender.BlendStep(followerState, blendedFollowStateBuffer, followerStateBuffer,
+                        serverStateBuffer))
+                {
+                    PhysicsStateRecord record = blendedFollowStateBuffer.Get((int) followerState.tickId);
+                    SnapTo(record);
+                    Debug.Log($"[ClientPredictedEntity][Blend][TickOverlapWithAuthority][2](goId:{gameObject.GetInstanceID()}) BlendedTick({record}) tickId:{followerState.tickId}");
+                }
+                else
+                {
+                    Debug.Log($"[ClientPredictedEntity][Blend][TickOverlapWithAuthority][2](goId:{gameObject.GetInstanceID()}) BlendedTick(APPLY_SKIPPED) tickId:{followerState.tickId}");
+                }
             }
             else
             {
-                Debug.Log($"[ClientPredictedEntity][Blend][TickOverlapWithAuthority][2] BlendedTick([SKIP]) tickId:{followerState.tickId}");
+                Debug.Log($"[ClientPredictedEntity][Blend][TickOverlapWithAuthority][2](goId:{gameObject.GetInstanceID()}) BlendedTick([SKIP]) tickId:{followerState.tickId}");
             }
             return true;
         }
