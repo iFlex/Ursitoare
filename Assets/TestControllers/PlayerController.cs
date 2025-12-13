@@ -75,7 +75,7 @@ public abstract class PlayerController : NetworkBehaviour, PredictableComponent,
                 RequestSwitchBack();
             }
         }
-        
+
         dbgRedy = predictedMono.isReady;
         if (!redy && predictedMono.isReady)
         {
@@ -83,7 +83,7 @@ public abstract class PlayerController : NetworkBehaviour, PredictableComponent,
             spawned.Dispatch(this);
             redy = true;
         }
-        else
+        if (!redy)
         {
             return;
         }
@@ -107,6 +107,15 @@ public abstract class PlayerController : NetworkBehaviour, PredictableComponent,
                                                       $"SmoothWindow:{(SingletonUtils.localVisInterpolator != null ? SingletonUtils.localVisInterpolator.slidingWindowTickSize : -1)}\n " +
                                                       $"FPS:{1/Time.deltaTime}\n " +
                                                       $"FrameTime:{Time.deltaTime}\n";
+
+            foreach (ClientPredictedEntity cpe in PredictionManager.Instance._clientEntities.Values)
+            {
+                if (cpe.gameObject != predictedMono.gameObject)
+                {
+                    SingletonUtils.instance.clientText.text +=
+                        $"\n\nTotalInteractionsWithAuth:{cpe.totalInteractionsWithLocalAuthority}\n blendTicks:{cpe.totalBlendedFollowerTicks}\n followSrvTicks:{cpe.totalServerFollowerTicks}";
+                }
+            }
         }
     }
     

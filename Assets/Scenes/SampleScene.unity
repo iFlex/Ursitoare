@@ -152,7 +152,7 @@ RectTransform:
   - {fileID: 528430556}
   m_Father: {fileID: 2008716145}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.8, y: 0.8}
+  m_AnchorMin: {x: 0.8, y: 0.6}
   m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
@@ -401,6 +401,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   localGO: {fileID: 0}
+  autoTrackRigidbodies: 1
 --- !u!1 &149778445
 GameObject:
   m_ObjectHideFlags: 0
@@ -960,7 +961,7 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 62.55
+  m_fontSize: 66.9
   m_fontSizeBase: 36
   m_fontWeight: 400
   m_enableAutoSizing: 1
@@ -1096,7 +1097,7 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 62.55
+  m_fontSize: 72
   m_fontSizeBase: 36
   m_fontWeight: 400
   m_enableAutoSizing: 1
@@ -1372,6 +1373,9 @@ MonoBehaviour:
   predictionManager: {fileID: 90500650}
   serverText: {fileID: 445369649}
   sharedGOPrefab: {fileID: 4463793978811421536, guid: 472f2f983e93c6e42b6195190ffd972f, type: 3}
+  sharedGO: {fileID: 0}
+  sharedPredMono: {fileID: 0}
+  localPredMono: {fileID: 0}
   reliable: 0
   resimCounter: 0
   sendRateMultiplier: 1

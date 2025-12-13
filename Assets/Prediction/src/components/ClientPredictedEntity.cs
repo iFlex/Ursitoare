@@ -45,7 +45,7 @@ namespace Prediction
         public RingBuffer<PhysicsStateRecord> blendedFollowStateBuffer;
         public RingBuffer<PhysicsStateRecord> followerStateBuffer;
 
-        public FollowerStateBlender followerStateBlender = new WeightedAverageBlender();
+        public FollowerStateBlender followerStateBlender = new DefaultToClientSimBlender(); //new WeightedAverageBlender();
         public FollowerState followerState = new FollowerState();
         
         private bool isServer;

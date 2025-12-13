@@ -14,9 +14,9 @@ namespace Prediction.StateBlend
         public bool BlendStep(ClientPredictedEntity.FollowerState state, RingBuffer<PhysicsStateRecord> blendedStateBuffer, RingBuffer<PhysicsStateRecord> followerStateBuffer,
             TickIndexedBuffer<PhysicsStateRecord> serverStateBuffer)
         {
-            PhysicsStateRecord svState = serverStateBuffer.Get(state.tickId);
             int prevTick = (int) state.tickId - 1;
             PhysicsStateRecord prevState = followerStateBuffer.Get(prevTick); 
+            PhysicsStateRecord svState = serverStateBuffer.Get(state.tickId);
             PhysicsStateRecord svPrevState = serverStateBuffer.Get((uint) prevTick);
             PhysicsStateRecord blendState = blendedStateBuffer.Get((int)state.tickId);
             blendState.tickId = state.tickId;
@@ -38,6 +38,7 @@ namespace Prediction.StateBlend
             
             //Blend
             float serverBias = (float)(state.tickId - state.overlapWithAuthorityStart) / (state.overlapWithAuthorityEnd - state.overlapWithAuthorityStart);
+            //float serverBias = 0.5f;
             blendState.position = Vector3.Lerp(prevState.position, svState.position, serverBias);
             blendState.rotation = Quaternion.Lerp(prevState.rotation, svState.rotation, serverBias);
             blendState.velocity = Vector3.Lerp(prevState.velocity, svState.velocity, serverBias);
