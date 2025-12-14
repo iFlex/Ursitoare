@@ -8,6 +8,10 @@ namespace Prediction.Simulation
     public class RewindablePhysicsController : PhysicsController
     {
         public static bool DEBUG_STEP = false;
+        public static bool  USE_MAX_DEPEN_SPEED = false;
+        public static float MAX_DEPEN_SPEED = 4f;
+        public static RewindablePhysicsController Instance;
+        
         public int bufferSize = 60;
         private uint tickId;
         private Dictionary<Rigidbody, RingBuffer<PhysicsStateRecord>> worldHistory = new();
@@ -16,6 +20,7 @@ namespace Prediction.Simulation
         public void Setup(bool isServer)
         {
             Physics.simulationMode = SimulationMode.Script;
+            Instance = this;
         }
 
         public void Simulate()
@@ -82,11 +87,21 @@ namespace Prediction.Simulation
                 ringBuffer.Set(i, new PhysicsStateRecord());
             }
             worldHistory[rigidbody] = ringBuffer;
+            rigidbody.maxDepenetrationVelocity = MAX_DEPEN_SPEED;
         }
 
         public void Untrack(Rigidbody rigidbody)
         {
             worldHistory.Remove(rigidbody);
+        }
+
+        public void SetMaxDepenetrationVelocity(float velocity)
+        {
+            MAX_DEPEN_SPEED = velocity;
+            foreach (KeyValuePair<Rigidbody, RingBuffer<PhysicsStateRecord>> pair in worldHistory)
+            {
+                pair.Key.maxDepenetrationVelocity = MAX_DEPEN_SPEED;
+            }
         }
     }
 }

@@ -52,30 +52,52 @@ namespace DefaultNamespace
                 PlayerController pc = localCPE.gameObject.GetComponent<PlayerController>();
                 pc.fcam.gameObject.SetActive(!pc.fcam.gameObject.activeSelf);
             }
-
-            if (Input.GetKeyDown(KeyCode.Alpha0))
+            
+            //TODO: control more of the latency sim properties here.
+            if (Input.GetKey(KeyCode.L) && Input.GetKeyDown(KeyCode.Alpha0))
             {
                 latencySim.latency = 0;
             }
-            if (Input.GetKeyDown(KeyCode.Alpha1))
+            if (Input.GetKey(KeyCode.L) && Input.GetKeyDown(KeyCode.Alpha1))
             {
                 latencySim.latency = 20;
             }
-            if (Input.GetKeyDown(KeyCode.Alpha2))
+            if (Input.GetKey(KeyCode.L) && Input.GetKeyDown(KeyCode.Alpha2))
             {
                 latencySim.latency = 35;
             }
-            if (Input.GetKeyDown(KeyCode.Alpha3))
+            if (Input.GetKey(KeyCode.L) && Input.GetKeyDown(KeyCode.Alpha3))
             {
                 latencySim.latency = 52;
             }
-            if (Input.GetKeyDown(KeyCode.Alpha4))
+            if (Input.GetKey(KeyCode.L) && Input.GetKeyDown(KeyCode.Alpha4))
             {
                 latencySim.latency = 100;
             }
-            if (Input.GetKeyDown(KeyCode.Alpha5))
+            if (Input.GetKey(KeyCode.L) && Input.GetKeyDown(KeyCode.Alpha5))
             {
                 latencySim.latency = 150;
+            }
+            
+            if (Input.GetKey(KeyCode.J) && Input.GetKeyDown(KeyCode.Alpha0))
+            {
+                latencySim.jitter = 0;
+            }
+            if (Input.GetKey(KeyCode.J) && Input.GetKeyDown(KeyCode.Alpha1))
+            {
+                latencySim.jitter = 0.01f;
+            }
+            if (Input.GetKey(KeyCode.J) && Input.GetKeyDown(KeyCode.Alpha2))
+            {
+                latencySim.jitter = 0.02f;
+            }
+            if (Input.GetKey(KeyCode.J) && Input.GetKeyDown(KeyCode.Alpha3))
+            {
+                latencySim.jitter = 0.1f;
+            }
+            if (Input.GetKey(KeyCode.J) && Input.GetKeyDown(KeyCode.Alpha4))
+            {
+                latencySim.jitter = 0.2f;
             }
 
             if (Input.GetKeyDown(KeyCode.I))
@@ -93,11 +115,11 @@ namespace DefaultNamespace
                 localCPE?.SetSingleStateEligibilityCheckHandler(deciders[deciderIndex].Check);
             }
             
-            if (Input.GetKeyDown(KeyCode.O))
+            if (Input.GetKeyDown(KeyCode.U))
             {
                 localVisInterpolator.slidingWindowTickSize++;
             }
-            if (Input.GetKeyDown(KeyCode.L))
+            if (Input.GetKeyDown(KeyCode.J))
             {
                 localVisInterpolator.slidingWindowTickSize--;
                 if (localVisInterpolator.slidingWindowTickSize < 1)

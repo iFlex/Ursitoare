@@ -17,7 +17,10 @@ namespace Prediction
         public static PredictionManager Instance;
         public static Func<VisualsInterpolationsProvider> INTERPOLATION_PROVIDER = () => new MovingAverageInterpolator();
         public static SingleSnapshotInstanceResimChecker SNAPSHOT_INSTANCE_RESIM_CHECKER = new SimpleConfigurableResimulationDecider();
-        public static PhysicsController PHYSICS_CONTROLLED = new RewindablePhysicsController(); // new SimplePhysicsControllerKinematic();
+        
+        //public static PhysicsController PHYSICS_CONTROLLED = new SimplePhysicsControllerKinematic();
+        public static PhysicsController PHYSICS_CONTROLLED = new RewindablePhysicsController();
+        
         public static Func<double> ROUND_TRIP_GETTER;
         
         [SerializeField] private GameObject localGO;

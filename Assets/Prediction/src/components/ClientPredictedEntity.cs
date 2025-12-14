@@ -44,9 +44,11 @@ namespace Prediction
         //TODO: make visible for testing in tests assembly
         public RingBuffer<PhysicsStateRecord> blendedFollowStateBuffer;
         public RingBuffer<PhysicsStateRecord> followerStateBuffer;
-
+        
+        //TODO: make this hot swappable
         public FollowerStateBlender followerStateBlender = new WeightedAverageBlender();
         //public FollowerStateBlender followerStateBlender = new DefaultToClientSimBlender();
+        
         public FollowerState followerState = new FollowerState();
         
         private bool isServer;

@@ -5,6 +5,7 @@ using Prediction;
 using Prediction.data;
 using Prediction.Interpolation;
 using Prediction.policies.singleInstance;
+using Prediction.StateBlend;
 using Prediction.wrappers;
 using Unity.Cinemachine;
 using UnityEngine;
@@ -112,8 +113,15 @@ public abstract class PlayerController : NetworkBehaviour, PredictableComponent,
             {
                 if (cpe.gameObject != predictedMono.gameObject)
                 {
+                    uint blendTicksWithoutSv = 0;
+                    uint blendTicksWithOldSvData = 0;
+                    if (cpe.followerStateBlender is WeightedAverageBlender)
+                    {
+                        blendTicksWithoutSv = ((WeightedAverageBlender)cpe.followerStateBlender).ticksWithoutServerData;
+                        blendTicksWithOldSvData = ((WeightedAverageBlender)cpe.followerStateBlender).ticksWithOldSvData;
+                    }
                     SingletonUtils.instance.clientText.text +=
-                        $"\n\nTotalInteractionsWithAuth:{cpe.totalInteractionsWithLocalAuthority}\n blendTicks:{cpe.totalBlendedFollowerTicks}\n followSrvTicks:{cpe.totalServerFollowerTicks}";
+                        $"\n\nTotalInteractionsWithAuth:{cpe.totalInteractionsWithLocalAuthority}\n blendTicks:{cpe.totalBlendedFollowerTicks}\n followSrvTicks:{cpe.totalServerFollowerTicks}\n ticksWithNoSv:{blendTicksWithoutSv}\n ticksWithOldSvDta:{blendTicksWithOldSvData}";
                 }
             }
         }

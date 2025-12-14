@@ -132,7 +132,7 @@ namespace DefaultNamespace
         {
             if (serverText)
             {
-                serverText.text = "";
+                serverText.text = $"NetLayer:: Latency:{SingletonUtils.instance.latencySim.latency} Jitter:{SingletonUtils.instance.latencySim.jitter}\n";
                 //TODO: make _serverEntityToId private again
                 foreach (KeyValuePair<ServerPredictedEntity, uint> pair in predictionManager._serverEntityToId)
                 {
