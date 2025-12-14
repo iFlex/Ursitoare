@@ -100,12 +100,14 @@ public abstract class PlayerController : NetworkBehaviour, PredictableComponent,
             SingletonUtils.instance.clientText.text = $"Tick:{predictedMono.clientPredictedEntity.totalTicks}\n " +
                                                       $"ServerDelay:{predictedMono.clientPredictedEntity.GetServerDelay()}\n " +
                                                       $"Resimulations:{predictedMono.clientPredictedEntity.totalResimulations}\n " +
+                                                      $"ResimDuringBlend:{ClientPredictedEntity.RESMIS_DURING_BLEND}\n " +
                                                       $"AvgResimLen:{predictedMono.clientPredictedEntity.GetAverageResimPerTick()} " +
                                                       $"TotalResimSteps:{predictedMono.clientPredictedEntity.totalResimulationSteps}\n " +
                                                       $"Skips:{predictedMono.clientPredictedEntity.totalSimulationSkips}\n " +
                                                       $"Velo:{predictedMono.clientPredictedEntity.rigidbody.linearVelocity.magnitude}\n " +
                                                       $"DistThres:{((SimpleConfigurableResimulationDecider)PredictionManager.SNAPSHOT_INSTANCE_RESIM_CHECKER).distResimThreshold}\n " +
                                                       $"SmoothWindow:{(SingletonUtils.localVisInterpolator != null ? SingletonUtils.localVisInterpolator.slidingWindowTickSize : -1)}\n " +
+                                                      $"BlendingEntities:{ClientPredictedEntity.BLENDING_ENTITIES_COUNTER}\n " +
                                                       $"FPS:{1/Time.deltaTime}\n " +
                                                       $"FrameTime:{Time.deltaTime}\n";
 
@@ -121,7 +123,7 @@ public abstract class PlayerController : NetworkBehaviour, PredictableComponent,
                         blendTicksWithOldSvData = ((WeightedAverageBlender)cpe.followerStateBlender).ticksWithOldSvData;
                     }
                     SingletonUtils.instance.clientText.text +=
-                        $"\n\nTotalInteractionsWithAuth:{cpe.totalInteractionsWithLocalAuthority}\n blendTicks:{cpe.totalBlendedFollowerTicks}\n followSrvTicks:{cpe.totalServerFollowerTicks}\n ticksWithNoSv:{blendTicksWithoutSv}\n ticksWithOldSvDta:{blendTicksWithOldSvData}";
+                        $"\n\nTotalInteractionsWithAuth:{cpe.totalInteractionsWithLocalAuthority}\n blendTicks:{cpe.totalBlendedFollowerTicks}\n followSrvTicks:{cpe.totalServerFollowerTicks}\n ticksWithNoSv:{blendTicksWithoutSv}\n ticksWithOldSvDta:{blendTicksWithOldSvData}\n blending:{cpe.followerState.overlappingWithLocalAuthority}";
                 }
             }
         }

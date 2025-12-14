@@ -9,7 +9,9 @@ namespace Prediction.Simulation
     {
         public static bool DEBUG_STEP = false;
         public static bool  USE_MAX_DEPEN_SPEED = false;
-        public static float MAX_DEPEN_SPEED = 4f;
+        public static float MAX_DEPENTRATION_SPEED = 4f;
+        public static int SOLVER_ITERATIONS = 5;  //6
+        public static int VELO_SOLVER_ITERATIONS = 1;
         public static RewindablePhysicsController Instance;
         
         public int bufferSize = 60;
@@ -48,7 +50,7 @@ namespace Prediction.Simulation
         {
             mainResimulationEntity = entity;
         }
-
+    
         public void Rewind(uint ticks)
         {
             tickId -= ticks;
@@ -87,7 +89,9 @@ namespace Prediction.Simulation
                 ringBuffer.Set(i, new PhysicsStateRecord());
             }
             worldHistory[rigidbody] = ringBuffer;
-            rigidbody.maxDepenetrationVelocity = MAX_DEPEN_SPEED;
+            rigidbody.maxDepenetrationVelocity = MAX_DEPENTRATION_SPEED;
+            rigidbody.solverIterations = SOLVER_ITERATIONS;
+            rigidbody.solverVelocityIterations = VELO_SOLVER_ITERATIONS;
         }
 
         public void Untrack(Rigidbody rigidbody)
@@ -97,10 +101,10 @@ namespace Prediction.Simulation
 
         public void SetMaxDepenetrationVelocity(float velocity)
         {
-            MAX_DEPEN_SPEED = velocity;
+            MAX_DEPENTRATION_SPEED = velocity;
             foreach (KeyValuePair<Rigidbody, RingBuffer<PhysicsStateRecord>> pair in worldHistory)
             {
-                pair.Key.maxDepenetrationVelocity = MAX_DEPEN_SPEED;
+                pair.Key.maxDepenetrationVelocity = MAX_DEPENTRATION_SPEED;
             }
         }
     }

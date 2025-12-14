@@ -13,6 +13,8 @@ namespace Prediction
     public class ClientPredictedEntity : AbstractPredictedEntity
     {
         public static bool DEBUG = false;
+        public static int BLENDING_ENTITIES_COUNTER = 0;
+        public static int RESMIS_DURING_BLEND = 0;
         
         //STATE TRACKING
         public uint maxAllowedAvgResimPerTick = 1;
@@ -272,6 +274,11 @@ namespace Prediction
         
         void ResimulateFrom(uint startTick, uint lastAppliedTick, PhysicsStateRecord startState)
         {
+            if (BLENDING_ENTITIES_COUNTER > 0)
+            {
+                RESMIS_DURING_BLEND++;
+            }
+            
             physicsController.BeforeResimulate(this);
             resimulation.Dispatch(true);
             physicsController.Rewind(lastAppliedTick - startTick);
@@ -360,14 +367,15 @@ namespace Prediction
             totalSimulationSkips = 0;
             totalDesyncToSnapCount = 0;
         }
+        
+        public bool subsequentCollisionsExtendInterval = false;
+        public bool collisionsResetBlendIntervalCompletely = false;
+        public uint blendIntervalMultiplier = 3;
 
         public uint totalInteractionsWithLocalAuthority = 0;
         public uint totalBlendedFollowerTicks = 0;
         public uint totalBlendedFollowerTicksSnapTo = 0;
         public uint totalServerFollowerTicks = 0;
-        public bool subsequentCollisionsExtendInterval = true;
-        public bool collisionsResetBlendIntervalCompletely = false;
-        public uint blendIntervalMultiplier = 3;
         
         //NOTE: external entry point
         public void MarkInteractionWithLocalAuthority()
@@ -378,7 +386,7 @@ namespace Prediction
             totalInteractionsWithLocalAuthority++;
             if (!subsequentCollisionsExtendInterval && followerState.overlappingWithLocalAuthority)
                 return;
-            
+
             bool isSubsequentInteraction = followerState.overlappingWithLocalAuthority;
             //TODO: wire this getter in or wire in the prediction manager (however that's coupling)
             uint serverLatencyInTicks = PredictionManager.GetServerTickDelay() * blendIntervalMultiplier;
@@ -391,6 +399,10 @@ namespace Prediction
             }
             followerState.overlapWithAuthorityEnd = followerState.tickId + serverLatencyInTicks;
             
+            if (!followerState.overlappingWithLocalAuthority)
+            {
+                BLENDING_ENTITIES_COUNTER++;
+            }
             //TODO: think well about subsequent colisions, we don't want to overwrite them with the SnapTo phase...
             //For now only the first collision in blended window triggers this
             //TODO: consider externally applied forces
@@ -457,6 +469,10 @@ namespace Prediction
             
             public void Cancel()
             {
+                if (overlappingWithLocalAuthority)
+                {
+                    BLENDING_ENTITIES_COUNTER--;
+                }
                 overlappingWithLocalAuthority = false;
             }
 
