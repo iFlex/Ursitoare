@@ -116,7 +116,7 @@ public abstract class PlayerController : NetworkBehaviour, PredictableComponent,
                 if (cpe.gameObject != predictedMono.gameObject)
                 {
                     SingletonUtils.instance.clientText.text +=
-                        $"\nResimsAuth:{cpe.resimTicksAsAuthority} ResimsFlwr:{cpe.resimTicksAsFollower}\n";
+                        $"\nid:{cpe.id} ResimsAuth:{cpe.resimTicksAsAuthority} ResimsFlwr:{cpe.resimTicksAsFollower}\n";
                 }
             }
         }

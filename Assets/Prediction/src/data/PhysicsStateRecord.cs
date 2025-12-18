@@ -9,6 +9,7 @@ namespace Prediction.data
         public Quaternion rotation;
         public Vector3 velocity;
         public Vector3 angularVelocity;
+        public PredictionInputRecord input;
 
         public void From(Rigidbody rigidbody)
         {
@@ -43,7 +44,7 @@ namespace Prediction.data
 
         public override string ToString()
         {
-            return $"t:{tickId} p:{position} r:{rotation} v:{velocity} ang:{angularVelocity}";
+            return $"t:{tickId} p:{position} r:{rotation} v:{velocity} ang:{angularVelocity} input:{input}";
         }
         
         public override bool Equals(object obj)

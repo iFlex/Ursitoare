@@ -8,7 +8,7 @@ namespace Prediction
     //TODO: document in readme
     public class ServerPredictedEntity : AbstractPredictedEntity
     {
-        public static bool DEBUG = false;
+        public static bool DEBUG = true;
         
         public GameObject gameObject;
         private PhysicsStateRecord serverStateBfr = new PhysicsStateRecord();
@@ -65,9 +65,9 @@ namespace Prediction
         public uint ServerSimulationTick()
         {
             //NOTE: this also loads TickId with the latest value
-            PredictionInputRecord nextInput = TakeNextInput();
+            PredictionInputRecord nextInput = TakeNextInput(false);
             if (DEBUG)
-                Debug.Log($"[ServerPredictedEntity][ServerSimulationTick] goID:{gameObject.GetInstanceID()} lastAppliedTick:{lastAppliedTick} buffRange:{inputQueue.GetRange()} buffFill:{inputQueue.GetFill()} nextInput:{nextInput}");
+                Debug.Log($"[ServerPredictedEntity][ServerSimulationTick] id:{id} goID:{gameObject.GetInstanceID()} lastAppliedTick:{lastAppliedTick} buffRange:{inputQueue.GetRange()} buffFill:{inputQueue.GetFill()} nextInput:{nextInput}");
             if (nextInput != null)
             {
                 int delta = (int)(tickId > lastAppliedTick ? tickId - lastAppliedTick : lastAppliedTick - tickId);
@@ -98,6 +98,9 @@ namespace Prediction
         public PhysicsStateRecord SamplePhysicsState()
         {
             PopulatePhysicsStateRecord(GetTickId(), serverStateBfr);
+            serverStateBfr.input = inputQueue.Remove(GetTickId());
+            if (DEBUG)
+                Debug.Log($"[ServerPredictedEntity][SamplePhysicsState]({id}) input:{serverStateBfr}");
             return serverStateBfr;
         }
 
@@ -110,7 +113,7 @@ namespace Prediction
         public void BufferClientTick(uint clientTickId, PredictionInputRecord inputRecord)
         {
             if (DEBUG)
-                Debug.Log($"[ServerPredictedEntity][BufferClientTick]({gameObject.GetInstanceID()}) clientTickId:{clientTickId} input:{inputRecord}");
+                Debug.Log($"[ServerPredictedEntity][BufferClientTick]({gameObject.GetInstanceID()}) clientTickId:{clientTickId} tickId:{tickId} input:{inputRecord}");
             
             if (inputQueue.GetFill() == 0)
             {
@@ -124,11 +127,6 @@ namespace Prediction
             else
             {
                 lateTickCount++;
-            }
-
-            if (ShouldSnapToClient())
-            {
-                SnapToLatest();
             }
         }
         
@@ -157,7 +155,7 @@ namespace Prediction
             return tickId;
         }
         
-        public PredictionInputRecord TakeNextInput()
+        public PredictionInputRecord TakeNextInput(bool remove)
         {
             if (useBuffering && !CanUseBuffer())
                 return null;
@@ -166,7 +164,11 @@ namespace Prediction
             if (newTick > 0)
             {
                 tickId = newTick;
-                return inputQueue.Remove(tickId);
+                if (remove)
+                {
+                    return inputQueue.Remove(tickId);
+                }
+                return inputQueue.Get(newTick);
             }
             return inputQueue.emptyValue;
         }

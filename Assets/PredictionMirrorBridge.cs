@@ -10,7 +10,7 @@ namespace DefaultNamespace
     public class PredictionMirrorBridge : NetworkBehaviour
     {
         public static PredictionMirrorBridge Instance;
-        public static bool MSG_DEBUG = false;
+        public static bool MSG_DEBUG = true;
         public static bool PRED_DEBUG = false;
 
         public NetworkManager manager;
@@ -65,6 +65,7 @@ namespace DefaultNamespace
             PredictionManager.ROUND_TRIP_GETTER = () => NetworkTime.rtt;
             if (isClient)
             {
+                Debug.Log($"[PredictionMirrorBridge][clientStateSender] SETUP CLIENT SENDER CALLBACK");
                 predictionManager.clientStateSender = (tickId, data) =>
                 {
                     if (MSG_DEBUG)
@@ -76,6 +77,7 @@ namespace DefaultNamespace
             
             if (isServer)
             {
+                Debug.Log($"[PredictionMirrorBridge][clientStateSender] SETUP SERVER SEND CALLBACK");
                 predictionManager.connectionsIterator = () => NetworkServer.connections.Keys;
                 predictionManager.serverStateSender = (connId, entityId, data) =>
                 {
