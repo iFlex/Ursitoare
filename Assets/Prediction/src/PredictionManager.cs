@@ -44,7 +44,7 @@ namespace Prediction
         public uint lastClientAppliedTick;
         private bool setup = false;
         public bool autoTrackRigidbodies = true;
-        public bool useServerWorldStateMessage = false;
+        public bool useServerWorldStateMessage = true;
 
         public Action<uint, PredictionInputRecord>       clientStateSender;
         // connectionId, entityId, state
@@ -576,6 +576,9 @@ namespace Prediction
 
         public void OnServerWorldStateReceived(WorldStateRecord wsr)
         {
+            if (DEBUG)
+                Debug.Log($"[PredictionManager][OnServerWorldStateReceived] WorldState:{wsr}]");
+            
             if (isClient && !isServer)
             {
                 for (int i = 0; i < wsr.fill; i++)
