@@ -7,7 +7,7 @@ namespace Prediction
 {
     public class PredictedEntityVisuals : MonoBehaviour
     {
-        public static bool SHOW_DBG = true;
+        public static bool SHOW_DBG = false;
         [SerializeField] public GameObject visualsEntity;
         [SerializeField] private bool debug = false;
         [SerializeField] private GameObject serverGhostPrefab;

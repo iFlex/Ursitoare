@@ -9,7 +9,7 @@ namespace Prediction
     //TODO: document in readme
     public class ClientPredictedEntity : AbstractPredictedEntity
     {
-        public static bool DEBUG = true;
+        public static bool DEBUG = false;
         //STATE TRACKING
         public GameObject gameObject;
 

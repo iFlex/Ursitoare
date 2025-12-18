@@ -12,7 +12,7 @@ namespace Prediction
     //TODO: decouple the implementation from Time.fixedDeltaTime, have it be configurable
     public class PredictionManager: MonoBehaviour
     {
-        public static bool DEBUG = true;
+        public static bool DEBUG = false;
         //TODO: guard singleton
         public static PredictionManager Instance;
         //TODO: validate presence of all static providers
@@ -467,24 +467,22 @@ namespace Prediction
                         
                         PredictionInputRecord tickInputRecord = pair.Value.ClientSimulationTick(tickId);
                         lastClientAppliedTick = tickId;
-                        try
+                        if (!isServer)
                         {
-                            if (DEBUG)
-                                Debug.Log($"[PredictionManager][ClientPreSimTick][SEND] goID:{pair.Value.gameObject.GetInstanceID()} Client:{pair.Value} tick:{tickId}");
-                            clientStateSender?.Invoke(tickId, tickInputRecord);
+                            try
+                            {
+                                if (DEBUG)
+                                    Debug.Log($"[PredictionManager][ClientPreSimTick][SEND] goID:{pair.Value.gameObject.GetInstanceID()} Client:{pair.Value} tick:{tickId}");
+                                clientStateSender?.Invoke(tickId, tickInputRecord);
+                            }
+                            catch (Exception e)
+                            {
+                                EntityProcessingError err;
+                                err.exception = e;
+                                err.entityId = pair.Value.id;
+                                onClientStateSendError.Dispatch(err);
+                            }   
                         }
-                        catch (Exception e)
-                        {
-                            EntityProcessingError err;
-                            err.exception = e;
-                            err.entityId = pair.Value.id;
-                            onClientStateSendError.Dispatch(err);
-                        }
-                        /*
-                        if (isServer && pair.Value.id == localEntityId)
-                        {    
-                        }
-                        */
                     }
                     else if (!isServer)
                     {
@@ -514,7 +512,7 @@ namespace Prediction
                 {
                     ServerPredictedEntity entity = pair.Key;
                     uint id = pair.Value;
-                    if (!isClient && id != localEntityId)
+                    if (id != localEntityId)
                     {
                         MarkLatestAppliedTickId(entity.ServerSimulationTick(), entity);
                     }
@@ -541,6 +539,8 @@ namespace Prediction
                 {
                     state.input = localEntity.GetLastInput();
                 }
+                if (DEBUG)
+                    Debug.Log($"[PredictionManager][ServerPostSimTick] id:{id} update:{state}");
                 
                 if (useServerWorldStateMessage)
                 {

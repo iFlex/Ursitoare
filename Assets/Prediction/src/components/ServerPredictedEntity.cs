@@ -8,7 +8,7 @@ namespace Prediction
     //TODO: document in readme
     public class ServerPredictedEntity : AbstractPredictedEntity
     {
-        public static bool DEBUG = true;
+        public static bool DEBUG = false;
         
         public GameObject gameObject;
         private PhysicsStateRecord serverStateBfr = new PhysicsStateRecord();
