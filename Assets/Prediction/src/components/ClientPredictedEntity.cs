@@ -9,7 +9,7 @@ namespace Prediction
     //TODO: document in readme
     public class ClientPredictedEntity : AbstractPredictedEntity
     {
-        public static bool DEBUG = false;
+        public static bool DEBUG = true;
         //STATE TRACKING
         public GameObject gameObject;
 
@@ -39,6 +39,7 @@ namespace Prediction
         public bool isControlledLocally { get; private set; }
         
         //STATS
+        public uint lastTick = 0;
         public uint totalTicks = 0;
         public uint ticksAsFollower = 0;
         public uint ticksAsLocalAuthority = 0;
@@ -97,9 +98,15 @@ namespace Prediction
             LoadInput(inputRecord);
             ApplyForces();
 
+            lastTick = tickId;
             ticksAsLocalAuthority++;
             totalTicks++;
             return inputRecord;
+        }
+
+        public PredictionInputRecord GetLastInput()
+        {
+            return localInputBuffer.Get((int)lastTick);
         }
         
         public void ClientFollowerSimulationTick()
@@ -108,11 +115,29 @@ namespace Prediction
             {
                 throw new Exception("COMPONENT_MISUSE: locally controlled entity called ClientFollowerSimulationTick");
             }
-            
-            //TODO: get input from last state? :: inputRecord
-            //LoadInput(inputRecord);
-            //ApplyForces()
 
+            PhysicsStateRecord psr = serverStateBuffer.GetEnd();
+            if (psr != null)
+            {
+                PredictionInputRecord input = psr.input;
+                if (input != null)
+                {
+                    LoadInput(input);
+                    if (DEBUG)
+                        Debug.Log($"[ClientPredictedEntiy][ClientFollowerSimulationTick][OK] entityId:{id} withInput:{input} psr:{psr}");
+                }
+                else
+                {
+                    if (DEBUG)
+                        Debug.Log($"[ClientPredictedEntiy][ClientFollowerSimulationTick][NO_INPT] entityId:{id} Missing input");
+                }
+            }
+            else
+            {
+                if (DEBUG)
+                    Debug.Log($"[ClientPredictedEntiy][ClientFollowerSimulationTick][MISSING] entityId:{id} Missing end of buffer...");
+            }
+            ApplyForces();
             ticksAsFollower++;
             totalTicks++;
         }
@@ -251,8 +276,6 @@ namespace Prediction
             isControlledLocally = false;
             //TODO: consider if this is needed? it probably is
             //interpolationsProvider.Clear();
-            
-            totalTicks = 0;
         }
         
         public SafeEventDispatcher<PhysicsStateRecord> newStateReached = new();
