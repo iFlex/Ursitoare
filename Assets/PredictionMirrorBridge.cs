@@ -14,7 +14,7 @@ namespace DefaultNamespace
         public static bool PRED_DEBUG = false;
 
         public NetworkManager manager;
-        [SerializeField] PredictionManager predictionManager;
+        PredictionManager predictionManager = new PredictionManager();
         [SerializeField] private TMPro.TMP_Text serverText;
         [SerializeField] private GameObject sharedGOPrefab;
         public GameObject sharedGO;
@@ -45,6 +45,8 @@ namespace DefaultNamespace
 
         private void FixedUpdate()
         {
+            predictionManager.Tick();
+            
             if (!setSendRate)
             {
                 manager.sendRate = Mathf.CeilToInt(1f / Time.fixedDeltaTime) * sendRateMultiplier;   
@@ -157,7 +159,7 @@ namespace DefaultNamespace
                 foreach (KeyValuePair<ServerPredictedEntity, uint> pair in predictionManager._serverEntityToId)
                 {
                     //TODO: NOTE: i think elements remain in the buffer somehow and cause the range: reading to be incorrect and keep going up...
-                    serverText.text += $"connId:{entityIdToOwner.GetValueOrDefault(pair.Value, -1)} id:{pair.Value} tickId:{pair.Key.GetTickId()} catchup:{pair.Key.catchupTicks} bfrWipe:{pair.Key.catchupBufferWipes} skipped:{pair.Key.ticksPerCatchupSection} range:{pair.Key.BufferSize()} inputJumps:{pair.Key.inputJumps} maxDelay:{pair.Key.maxClientDelay}\n";
+                    serverText.text += $"connId:{entityIdToOwner.GetValueOrDefault(pair.Value, -1)} id:{pair.Value} tickId:{pair.Key.GetTickId()} bfrTicks:{pair.Key.totalBufferingTicks} catchup:{pair.Key.catchupTicks} bfrWipe:{pair.Key.catchupBufferWipes} skipped:{pair.Key.ticksPerCatchupSection} range:{pair.Key.BufferSize()} inputJumps:{pair.Key.inputJumps} maxDelay:{pair.Key.maxClientDelay}\n";
                 }
             }
 
@@ -166,7 +168,7 @@ namespace DefaultNamespace
                 PredictedEntityVisuals.SHOW_DBG = !PredictedEntityVisuals.SHOW_DBG;
             }
         }
-        
+
         [Command(requiresAuthority = false, channel = Channels.Unreliable)]
         void ReportToServerUnreliable(uint tickId, PredictionInputRecord data, NetworkConnectionToClient sender = null)
         {

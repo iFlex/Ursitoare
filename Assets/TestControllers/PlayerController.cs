@@ -102,9 +102,10 @@ public abstract class PlayerController : NetworkBehaviour, PredictableComponent,
                                                       $"AuthResims:{PredictionManager.Instance.totalResimulationsDueToAuthority}\n " +
                                                       $"FlwrResims:{PredictionManager.Instance.totalResimulationsDueToFollowers}\n " +
                                                       $"BothResims:{PredictionManager.Instance.totalResimulationsDueToBoth}\n " +
-                                                      $"AvgResimLen:{PredictionManager.Instance.GetAverageResimPerTick()} " +
-                                                      $"TotalResimSteps:{PredictionManager.Instance.totalResimulationSteps}\n " +
-                                                      $"Skips:{PredictionManager.Instance.totalSimulationSkips}\n " +
+                                                      $"AvgResimLen:{PredictionManager.Instance.GetAverageResimPerTick()}\n" +
+                                                      $"TotalResimSteps:{PredictionManager.Instance.totalResimulationSteps} ({(float)PredictionManager.Instance.totalResimulationSteps / PredictionManager.Instance.lastClientAppliedTick * 100}%)\n " +
+                                                      $"Skips:{PredictionManager.Instance.totalResimulationsSkipped}\n " +
+                                                      $"MaxResimOverbudget:{PredictionManager.Instance.maxResimulationOverbudget}\n " +
                                                       $"MaxSvDelay:{predictedMono.clientPredictedEntity.maxServerDelay}\n " +
                                                       $"Velo:{predictedMono.clientPredictedEntity.rigidbody.linearVelocity.magnitude}\n " +
                                                       $"DIST_TRES:{((SimpleConfigurableResimulationDecider)PredictionManager.SNAPSHOT_INSTANCE_RESIM_CHECKER).distResimThreshold}\n " +
@@ -112,12 +113,19 @@ public abstract class PlayerController : NetworkBehaviour, PredictableComponent,
                                                       $"FPS:{1/Time.deltaTime}\n " +
                                                       $"FrameTime:{Time.deltaTime}\n";
 
-            foreach (ClientPredictedEntity cpe in PredictionManager.Instance._clientEntities.Values)
+            foreach (PredictedEntity pe in PredictionManager.Instance._predictedEntities)
             {
-                if (cpe.gameObject != predictedMono.gameObject)
+                if (pe.GetClientEntity().gameObject != predictedMono.gameObject)
                 {
+                    PredictedEntityVisuals pev = pe.GetVisualsControlled();
+                    MovingAverageInterpolator vip = null;
+                    if (pev)
+                    {
+                        vip = (MovingAverageInterpolator) pev.interpolationProvider;
+                    }
+                    
                     SingletonUtils.instance.clientText.text +=
-                        $"\nid:{cpe.id} ResimTicksAuth:{cpe.resimTicksAsAuthority} ResimTicksFlwr:{cpe.resimTicksAsFollower}\n";
+                        $"\nid:{pe.GetId()} ResimTicksAuth:{pe.GetClientEntity().resimTicksAsAuthority} ResimTicksFlwr:{pe.GetClientEntity().resimTicksAsFollower} smthWindow:{(vip == null ? "" : vip.slidingWindowTickSize)}\n";
                 }
             }
         }

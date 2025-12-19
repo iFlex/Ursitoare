@@ -1,0 +1,20 @@
+{
+  "name": "com.sector0.physics.prediction",
+  "version": "1.0.0",
+  "displayName": "Client Side Prediction",
+  "description": "Client side prediction library.",
+  "unity": "6.0",
+  "author": {
+    "name": "Milorad Liviu Felix",
+    "email": "you@example.com",
+    "url": "https://www.yourwebsite.com"
+  },
+  "dependencies": {},
+  "samples": [
+    {
+      "displayName": "Basic Usage Example",
+      "description": "A scene showing how to use the tool.",
+      "path": "Samples~/BasicUsage"
+    }
+  ]
+}
