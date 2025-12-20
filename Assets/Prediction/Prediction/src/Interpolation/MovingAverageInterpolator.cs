@@ -226,7 +226,9 @@ namespace Prediction.Interpolation
                 //TODO: adapt to ping
                 //TODO: remove coupling to Time.fixedDeltaTime
                 //int ticks = Mathf.CeilToInt((float) (PredictionManager.ROUND_TRIP_GETTER() / Time.fixedDeltaTime) * 0.55f);
-                slidingWindowTickSize = 12; //Math.Max(12, ticks);
+                //slidingWindowTickSize = 12; //Math.Max(12, ticks);
+                //NOTE: not sure we really need this, set it the same as the client
+                slidingWindowTickSize = 6;
             }
         }
     }
