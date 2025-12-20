@@ -116,12 +116,17 @@ namespace Prediction
             return localInputBuffer.Get((int)lastTick);
         }
 
+        //TODO: not sure we need this...
         public uint followerOffset = 0;
         uint GetFollowerNextTick(uint tickId)
         {
+            //Just always give me the latest for now.
+            return serverStateBuffer.GetEndTick();
+            /*
             if (tickId < followerOffset)
                 return 0;
             return tickId - followerOffset;
+            */
         }
         
         public void ClientFollowerSimulationTick(uint tickId)
@@ -131,8 +136,7 @@ namespace Prediction
                 throw new Exception("COMPONENT_MISUSE: locally controlled entity called ClientFollowerSimulationTick");
             }
 
-            tickId = GetFollowerNextTick(tickId);
-            PhysicsStateRecord psr = serverStateBuffer.Get(tickId);
+            PhysicsStateRecord psr = serverStateBuffer.Get(GetFollowerNextTick(tickId));
             if (psr != null)
             {
                 PredictionInputRecord input = psr.input;
@@ -188,6 +192,7 @@ namespace Prediction
         public virtual PredictionDecision GetPredictionDecision(uint lastAppliedTick, out uint fromTick)
         {
             fromTick = 0;
+            //NOTE: .GetEnt() is always behind lastAppliedTick, so should be fine...
             PhysicsStateRecord serverState = serverStateBuffer.GetEnd();
             //NOTE: somehow the server reports are in the future. Don't resimulate until we get there too
             if (serverState == null || lastAppliedTick <= serverState.tickId)
@@ -199,7 +204,8 @@ namespace Prediction
 
         bool AddServerState(uint lastAppliedTick, PhysicsStateRecord serverRecord)
         {
-            Debug.Log($"[ClientPreditedEntity][AddServerState]({id}) data:{serverRecord}");
+            if (DEBUG)
+                Debug.Log($"[ClientPreditedEntity][AddServerState]({id}) data:{serverRecord}");
             //TODO: use lastAppliedTick to determine how old the update is and do stuff about it
             serverStateBuffer.Add(serverRecord.tickId, serverRecord);
             return serverRecord.tickId == serverStateBuffer.GetEndTick();

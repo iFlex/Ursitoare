@@ -13,7 +13,7 @@ namespace Prediction
     //TODO: decouple the implementation from Time.fixedDeltaTime, have it be configurable
     public class PredictionManager
     {
-        public static bool DEBUG = true;
+        public static bool DEBUG = false;
         //TODO: guard singleton
         public static PredictionManager Instance;
         //TODO: validate presence of all static providers
@@ -475,6 +475,7 @@ namespace Prediction
         {
             if (isClient)
             {
+                //Uses latest update for each follower
                 ClientResimulationCheckPass();
                 foreach (KeyValuePair<uint, ClientPredictedEntity> pair in _clientEntities)
                 {
@@ -511,6 +512,7 @@ namespace Prediction
                     else if (!isServer)
                     {
                         //Only run this on the pure client yo... 
+                        //Uses tickId 
                         pair.Value.ClientFollowerSimulationTick(tickId);
                     }
                 }
