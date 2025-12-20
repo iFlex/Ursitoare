@@ -49,6 +49,8 @@ namespace Prediction
         public bool useServerWorldStateMessage = true;
 
         public Action<uint, PredictionInputRecord>       clientStateSender;
+        //TODO: validate and wire up
+        public Action<uint>                       spectatorHeartbeatSender;
         // connectionId, entityId, state
         public Action<int, uint, PhysicsStateRecord>    serverStateSender;
         // connectionId, world state
@@ -516,7 +518,17 @@ namespace Prediction
                         pair.Value.ClientFollowerSimulationTick(tickId);
                     }
                 }
+
+                if (localEntity == null)
+                {
+                    SendSpectatorHeartbeat(tickId);
+                }
             }
+        }
+
+        void SendSpectatorHeartbeat(uint tickId)
+        {
+            spectatorHeartbeatSender?.Invoke(tickId);
         }
 
         void ClientPostSimTick()
