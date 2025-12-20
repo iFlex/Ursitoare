@@ -116,27 +116,15 @@ namespace Prediction
             return localInputBuffer.Get((int)lastTick);
         }
 
-        //TODO: not sure we need this...
-        public uint followerOffset = 0;
-        uint GetFollowerNextTick(uint tickId)
-        {
-            //Just always give me the latest for now.
-            return serverStateBuffer.GetEndTick();
-            /*
-            if (tickId < followerOffset)
-                return 0;
-            return tickId - followerOffset;
-            */
-        }
-        
         public void ClientFollowerSimulationTick(uint tickId)
         {
             if (isControlledLocally)
             {
                 throw new Exception("COMPONENT_MISUSE: locally controlled entity called ClientFollowerSimulationTick");
             }
-
-            PhysicsStateRecord psr = serverStateBuffer.Get(GetFollowerNextTick(tickId));
+            
+            //TODO: consider if we need buffering here?
+            PhysicsStateRecord psr = serverStateBuffer.GetEnd();
             if (psr != null)
             {
                 PredictionInputRecord input = psr.input;
