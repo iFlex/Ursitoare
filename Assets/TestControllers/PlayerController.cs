@@ -5,7 +5,6 @@ using Prediction;
 using Prediction.data;
 using Prediction.Interpolation;
 using Prediction.policies.singleInstance;
-using Prediction.StateBlend;
 using Prediction.wrappers;
 using Unity.Cinemachine;
 using UnityEngine;
@@ -97,33 +96,36 @@ public abstract class PlayerController : NetworkBehaviour, PredictableComponent,
         
         if (predictedMono.IsControlledLocally() && SingletonUtils.instance.clientText)
         {
-            SingletonUtils.instance.clientText.text = $"Tick:{predictedMono.clientPredictedEntity.totalTicks}\n " +
-                                                      $"ServerDelay:{predictedMono.clientPredictedEntity.GetServerDelay()}\n " +
-                                                      $"Resimulations:{predictedMono.clientPredictedEntity.totalResimulations}\n " +
-                                                      $"ResimDuringBlend:{ClientPredictedEntity.RESMIS_DURING_BLEND}\n " +
-                                                      $"AvgResimLen:{predictedMono.clientPredictedEntity.GetAverageResimPerTick()} " +
-                                                      $"TotalResimSteps:{predictedMono.clientPredictedEntity.totalResimulationSteps}\n " +
-                                                      $"Skips:{predictedMono.clientPredictedEntity.totalSimulationSkips}\n " +
+            SingletonUtils.instance.clientText.text = $"Tick:{PredictionManager.Instance.lastClientAppliedTick} | {predictedMono.clientPredictedEntity.lastTick}\n " + 
+                                                      $"ServerDelay:{predictedMono.clientPredictedEntity.GetServerDelay()} | endT:{predictedMono.clientPredictedEntity.serverStateBuffer.GetEndTick()}\n " +
+                                                      $"Resimulations:{PredictionManager.Instance.totalResimulations}\n " +
+                                                      $"AuthResims:{PredictionManager.Instance.totalResimulationsDueToAuthority}\n " +
+                                                      $"FlwrResims:{PredictionManager.Instance.totalResimulationsDueToFollowers}\n " +
+                                                      $"BothResims:{PredictionManager.Instance.totalResimulationsDueToBoth}\n " +
+                                                      $"AvgResimLen:{PredictionManager.Instance.GetAverageResimPerTick()}\n" +
+                                                      $"TotalResimSteps:{PredictionManager.Instance.totalResimulationSteps} ({(float)PredictionManager.Instance.totalResimulationSteps / PredictionManager.Instance.lastClientAppliedTick * 100}%)\n " +
+                                                      $"Skips:{PredictionManager.Instance.totalResimulationsSkipped}\n " +
+                                                      $"MaxResimOverbudget:{PredictionManager.Instance.maxResimulationOverbudget}\n " +
+                                                      $"MaxSvDelay:{predictedMono.clientPredictedEntity.maxServerDelay}\n " +
                                                       $"Velo:{predictedMono.clientPredictedEntity.rigidbody.linearVelocity.magnitude}\n " +
-                                                      $"DistThres:{((SimpleConfigurableResimulationDecider)PredictionManager.SNAPSHOT_INSTANCE_RESIM_CHECKER).distResimThreshold}\n " +
-                                                      $"SmoothWindow:{(SingletonUtils.localVisInterpolator != null ? SingletonUtils.localVisInterpolator.slidingWindowTickSize : -1)}\n " +
-                                                      $"BlendingEntities:{ClientPredictedEntity.BLENDING_ENTITIES_COUNTER}\n " +
+                                                      $"DIST_TRES:{((SimpleConfigurableResimulationDecider)PredictionManager.SNAPSHOT_INSTANCE_RESIM_CHECKER).distResimThreshold}\n " +
+                                                      $"SMOOTH_WNDW:{(SingletonUtils.localVisInterpolator != null ? SingletonUtils.localVisInterpolator.slidingWindowTickSize : -1)}\n " +
                                                       $"FPS:{1/Time.deltaTime}\n " +
                                                       $"FrameTime:{Time.deltaTime}\n";
 
-            foreach (ClientPredictedEntity cpe in PredictionManager.Instance._clientEntities.Values)
+            foreach (PredictedEntity pe in PredictionManager.Instance._predictedEntities)
             {
-                if (cpe.gameObject != predictedMono.gameObject)
+                if (pe.GetClientEntity().gameObject != predictedMono.gameObject)
                 {
-                    uint blendTicksWithoutSv = 0;
-                    uint blendTicksWithOldSvData = 0;
-                    if (cpe.followerStateBlender is WeightedAverageBlender)
+                    PredictedEntityVisuals pev = pe.GetVisualsControlled();
+                    MovingAverageInterpolator vip = null;
+                    if (pev)
                     {
-                        blendTicksWithoutSv = ((WeightedAverageBlender)cpe.followerStateBlender).ticksWithoutServerData;
-                        blendTicksWithOldSvData = ((WeightedAverageBlender)cpe.followerStateBlender).ticksWithOldSvData;
+                        vip = (MovingAverageInterpolator) pev.interpolationProvider;
                     }
+                    
                     SingletonUtils.instance.clientText.text +=
-                        $"\n\nTotalInteractionsWithAuth:{cpe.totalInteractionsWithLocalAuthority}\n blendTicks:{cpe.totalBlendedFollowerTicks}\n followSrvTicks:{cpe.totalServerFollowerTicks}\n ticksWithNoSv:{blendTicksWithoutSv}\n ticksWithOldSvDta:{blendTicksWithOldSvData}\n blending:{cpe.followerState.overlappingWithLocalAuthority}";
+                        $"\nid:{pe.GetId()} ResimTicksAuth:{pe.GetClientEntity().resimTicksAsAuthority} ResimTicksFlwr:{pe.GetClientEntity().resimTicksAsFollower} smthWindow:{(vip == null ? "" : vip.slidingWindowTickSize)}\n";
                 }
             }
         }

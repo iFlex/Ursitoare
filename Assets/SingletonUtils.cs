@@ -52,6 +52,18 @@ namespace DefaultNamespace
                 PlayerController pc = localCPE.gameObject.GetComponent<PlayerController>();
                 pc.fcam.gameObject.SetActive(!pc.fcam.gameObject.activeSelf);
             }
+
+            if (Input.GetKeyDown(KeyCode.A))
+            {
+                PredictionManager.Instance.maxResimulationOverbudget++;
+            }
+            if (Input.GetKeyDown(KeyCode.Z))
+            {
+                if (PredictionManager.Instance.maxResimulationOverbudget != 0)
+                {
+                    PredictionManager.Instance.maxResimulationOverbudget--;
+                }
+            }
             
             //TODO: control more of the latency sim properties here.
             if (Input.GetKey(KeyCode.L) && Input.GetKeyDown(KeyCode.Alpha0))
@@ -105,14 +117,14 @@ namespace DefaultNamespace
                 deciderIndex++;
                 deciderIndex %= deciders.Length;
                 CURRENT_DECIDER = deciders[deciderIndex];
-                localCPE?.SetSingleStateEligibilityCheckHandler(deciders[deciderIndex].Check);
+                localCPE.SetSingleStateEligibilityCheckHandler(deciders[deciderIndex].Check);
             }
             if (Input.GetKeyDown(KeyCode.K))
             {
                 deciderIndex--;
                 deciderIndex = Mathf.Max(0, deciderIndex);
                 CURRENT_DECIDER = deciders[deciderIndex];
-                localCPE?.SetSingleStateEligibilityCheckHandler(deciders[deciderIndex].Check);
+                localCPE.SetSingleStateEligibilityCheckHandler(deciders[deciderIndex].Check);
             }
             
             if (Input.GetKeyDown(KeyCode.U))
