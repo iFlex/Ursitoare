@@ -100,7 +100,7 @@ namespace Prediction
                 if (clientHeartbeadSender == null)
                 {
                     throw new Exception(
-                        "INVALID_CONFIG: isClient = true but no clientHeartbeadSender provided");
+                        "INVALID_CONFIG: isClient = true but no clientHeartbeatSender provided");
                 }
                 if (clientStateSender == null)
                 {
@@ -488,14 +488,8 @@ namespace Prediction
                 ClientResimulationCheckPass();
                 foreach (KeyValuePair<uint, ClientPredictedEntity> pair in _clientEntities)
                 {
-                    if (pair.Value.isControlledLocally)
+                    if (pair.Value == localEntity)
                     {
-                        if (pair.Value != localEntity)
-                        {
-                            Debug.LogError($"[PredictionManager] ClientEntity != LocalEntity. Client:{pair.Value} Local:{localEntity}");
-                            continue;
-                        }
-                        
                         if (DEBUG)
                             Debug.Log($"[PredictionManager][ClientPreSimTick] Client:{pair.Value} tick:{tickId}");
                         

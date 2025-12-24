@@ -23,8 +23,12 @@ namespace Prediction.Tests
         MockPhysicsController physicsController;
         SimpleConfigurableResimulationDecider resimDecider = new SimpleConfigurableResimulationDecider();
         PredictionManager manager;
-        
-        //TODO: these tests may not be relevant
+
+        int clientSends = 0;
+        int clientHearatbeatSends = 0;
+        int serverSends = 0;
+        int serverWorldSends = 0;
+
         [SetUp]
         public void SetUp()
         {
@@ -46,12 +50,14 @@ namespace Prediction.Tests
             serverEntity2 = new ServerPredictedEntity(2, 20, serverRigidbody2, server2, new []{serverComponent2}, new[]{serverComponent2});
             serverEntity2.useBuffering = false;
 
+            clientSends = clientHearatbeatSends = serverWorldSends = serverSends = 0;
             PredictionManager.PHYSICS_CONTROLLED = physicsController;
-            
             manager = new PredictionManager();
             PredictionManager.PHYSICS_CONTROLLED = physicsController;
-            manager.serverStateSender = (a, b, c) => { };
-            manager.serverWorldStateSender = (a, b) => { };
+            manager.clientStateSender = (a, b) => { clientSends++; };
+            manager.clientHeartbeadSender = (a) => { clientHearatbeatSends++; };
+            manager.serverStateSender = (a, b, c) => { serverSends++; };
+            manager.serverWorldStateSender = (a, b) => { serverWorldSends++; };
             manager.connectionsIterator = () =>
             {
                 return new int[] { 1, 2, 3 };
@@ -85,6 +91,7 @@ namespace Prediction.Tests
         [Test]
         public void CheckUpdates_WithClientInput()
         {
+            manager.useServerWorldStateMessage = false;
             List<StateUpdate> sentStates = new List<StateUpdate>();
             manager.serverStateSender = (connId, entityId, state) =>
             {

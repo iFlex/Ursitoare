@@ -17,7 +17,12 @@ namespace Prediction.Tests
         MockPredictableControllableComponent component;
         SimpleConfigurableResimulationDecider resimDecider = new SimpleConfigurableResimulationDecider();
         PredictionManager manager;
-        
+
+        int clientSends = 0;
+        int clientHearatbeatSends = 0;
+        int serverSends = 0;
+        int serverWorldSends = 0;
+
         [SetUp]
         public void SetUp()
         {
@@ -28,7 +33,16 @@ namespace Prediction.Tests
             component = new MockPredictableControllableComponent();
             component.rigidbody = rigidbody;
             physicsController = new MockPhysicsController();
-            
+
+            clientSends = clientHearatbeatSends = serverWorldSends = serverSends = 0;
+            manager = new PredictionManager();
+            PredictionManager.PHYSICS_CONTROLLED = physicsController;
+            manager.clientStateSender = (a, b) => { clientSends++; };
+            manager.clientHeartbeadSender = (a) => { clientHearatbeatSends++; };
+            manager.serverStateSender = (a, b, c) => { serverSends++;  };
+            manager.serverWorldStateSender = (a, b) => { serverWorldSends++; };
+            manager.Setup(false, true);
+
         }
 
         [TearDown]
@@ -130,19 +144,14 @@ namespace Prediction.Tests
         
         [Test]
         public void TestServerDriftAndResimulate()
-        {
-            PredictionManager tstManager = new PredictionManager();
-            PredictionManager.PHYSICS_CONTROLLED = physicsController;
-            tstManager.clientStateSender = (a, b) => { };
-            tstManager.Setup(false, true);
-            
+        {            
             MockClientPredictedEntity mock1 = new MockClientPredictedEntity(1, false, 20, rigidbody, test, new []{component}, new[]{component});
             mock1.SetControlledLocally(true);
             mock1.SetSingleStateEligibilityCheckHandler(resimDecider.Check);
             mock1.decisionPassThrough = true;
             
-            tstManager.AddPredictedEntity(mock1);
-            tstManager.SetLocalEntity(1);
+            manager.AddPredictedEntity(mock1);
+            manager.SetLocalEntity(1);
             
             var inputs = new []       { Vector3.zero, Vector3.right, Vector3.up, Vector3.right, Vector3.up, Vector3.right,  Vector3.up, Vector3.right, Vector3.up, Vector3.right, Vector3.up, Vector3.right,   Vector3.up, Vector3.right, Vector3.up, Vector3.right, Vector3.up };
             var serverInputs = new [] { Vector3.zero, Vector3.right, Vector3.up, Vector3.right, Vector3.up,    Vector3.up,  Vector3.up, Vector3.right, Vector3.up, Vector3.right, Vector3.up, Vector3.up,      Vector3.up, Vector3.right, Vector3.up, Vector3.right, Vector3.up };
@@ -155,16 +164,16 @@ namespace Prediction.Tests
             for (uint tickId = 1; tickId < inputs.Length; ++tickId)
             {
                 component.inputVector = inputs[tickId];
-                tstManager.Tick();
+                manager.Tick();
                 if (tickId > serverDelay)
                 {
-                    tstManager.OnServerStateReceived(1, serverTicks[tickId - serverDelay]);
+                    manager.OnServerStateReceived(1, serverTicks[tickId - serverDelay]);
                 }
-                Assert.AreEqual(tickId, tstManager.lastClientAppliedTick);
+                Assert.AreEqual(tickId, manager.lastClientAppliedTick);
             }
             
             Assert.AreEqual(serverTicks[serverTicks.Length - 1].position, rigidbody.position);
-            Assert.AreEqual(2, tstManager.totalResimulations);
+            Assert.AreEqual(2, manager.totalResimulations);
             Vector3[] expectedPosStream = ClientPredictedEntityTest.ComputePosStream(serverInputs, posCorrections);
             for (int i = 1; i < inputs.Length; ++i)
             {
@@ -180,19 +189,13 @@ namespace Prediction.Tests
         [Test]
         public void TestExactlyOneResimNeededForOneMissedInput()
         {
-            //TODO: move to setup?
-            PredictionManager tstManager = new PredictionManager();
-            PredictionManager.PHYSICS_CONTROLLED = physicsController;
-            tstManager.clientStateSender = (a, b) => { };
-            tstManager.Setup(false, true);
-            
             MockClientPredictedEntity mock1 = new MockClientPredictedEntity(1, false, 20, rigidbody, test, new []{component}, new[]{component});
             mock1.SetControlledLocally(true);
             mock1.SetSingleStateEligibilityCheckHandler(resimDecider.Check);
             mock1.decisionPassThrough = true;
-            
-            tstManager.AddPredictedEntity(mock1);
-            tstManager.SetLocalEntity(1);
+
+            manager.AddPredictedEntity(mock1);
+            manager.SetLocalEntity(1);
             
             var inputs = new []       { Vector3.zero, Vector3.right, Vector3.up, Vector3.right, Vector3.up,    Vector3.right, Vector3.up, Vector3.right, Vector3.up };
             var serverInputs = new [] { Vector3.zero, Vector3.right, Vector3.up, Vector3.right, Vector3.right, Vector3.right, Vector3.up, Vector3.right, Vector3.up };
@@ -205,16 +208,16 @@ namespace Prediction.Tests
             for (uint tickId = 1; tickId < inputs.Length; ++tickId)
             {
                 component.inputVector = inputs[tickId];
-                tstManager.Tick();
+                manager.Tick();
                 if (tickId > serverDelay)
                 {
-                    tstManager.OnServerStateReceived(1, serverTicks[tickId - serverDelay]);
+                    manager.OnServerStateReceived(1, serverTicks[tickId - serverDelay]);
                 }
             }
             
             //TODO: move this test in PredicitonManager test
-            Assert.AreEqual(1, tstManager.totalResimulations);
-            Assert.AreEqual(serverDelay, tstManager.totalResimulationSteps);
+            Assert.AreEqual(1, manager.totalResimulations);
+            Assert.AreEqual(serverDelay, manager.totalResimulationSteps);
             Vector3[] expectedPosStream = ClientPredictedEntityTest.ComputePosStream(serverInputs, posCorrections);
             for (int i = 1; i < inputs.Length; ++i)
             {
@@ -228,22 +231,18 @@ namespace Prediction.Tests
         }
         
         //TODO: implement protection!
+        //TODO: revisit 
         [Test]
         public void TestMultiResimulationPrevention()
         {
-            PredictionManager tstManager = new PredictionManager();
-            PredictionManager.PHYSICS_CONTROLLED = physicsController;
-            tstManager.clientStateSender = (a, b) => { };
-            tstManager.Setup(false, true);
-            
             MockClientPredictedEntity mock1 = new MockClientPredictedEntity(1, false, 20, rigidbody, test, new []{component}, new[]{component});
             mock1.SetControlledLocally(true);
             mock1.SetSingleStateEligibilityCheckHandler(resimDecider.Check);
             mock1.decisionPassThrough = true;
-            
-            tstManager.AddPredictedEntity(mock1);
-            tstManager.SetLocalEntity(1);
-            tstManager.protectFromOversimulation = true;
+
+            manager.AddPredictedEntity(mock1);
+            manager.SetLocalEntity(1);
+            manager.protectFromOversimulation = true;
             
             int predictionAcceptable = 0;
             PhysicsStateRecord psr = new PhysicsStateRecord();
@@ -254,16 +253,64 @@ namespace Prediction.Tests
                 component.inputVector = Vector3.right * 2;
                 serverPos += Vector3.left * 2;
                 psr.position = serverPos;
-                tstManager.Tick();
+                manager.Tick();
                 
                 PhysicsStateRecord spsr = new PhysicsStateRecord();
                 spsr.From(psr);
                 spsr.tickId = tickId - 4;
-                tstManager.OnServerStateReceived(1, psr);
+                manager.OnServerStateReceived(1, psr);
             }
             Assert.AreEqual(0, predictionAcceptable);
-            Assert.AreEqual(67, tstManager.totalResimulationsSkipped); //33% resimulations
-            Assert.AreEqual(33, tstManager.totalResimulations);
+            Assert.AreEqual(67, manager.totalResimulationsSkipped); //33% resimulations
+            Assert.AreEqual(33, manager.totalResimulations);
+        }
+
+        [Test]
+        public void TestHeartbeatSending()
+        {
+            //No controlled entity
+            for (int i = 0; i < 100; ++i)
+            {
+                manager.Tick();
+            }
+
+            Assert.AreEqual(100, clientHearatbeatSends);
+            Assert.AreEqual(0, clientSends);
+            Assert.AreEqual(0, serverSends);
+            Assert.AreEqual(0, serverWorldSends);
+            
+            MockClientPredictedEntity mock1 = new MockClientPredictedEntity(1, false, 20, rigidbody, test, new []{component}, new[]{component});
+            mock1.SetControlledLocally(true);
+            mock1.SetSingleStateEligibilityCheckHandler(resimDecider.Check);
+            mock1.decisionPassThrough = true;
+
+            clientHearatbeatSends = clientSends = serverSends = serverWorldSends = 0;
+            manager.AddPredictedEntity(mock1);
+            manager.SetLocalEntity(1);
+            
+            for (int i = 0; i < 20; ++i)
+            {
+                manager.Tick();
+            }
+            
+            Assert.AreEqual(0, clientHearatbeatSends);
+            Assert.AreEqual(20, clientSends);
+            Assert.AreEqual(0, serverSends);
+            Assert.AreEqual(0, serverWorldSends);
+            
+            clientHearatbeatSends = clientSends = serverSends = serverWorldSends = 0;
+            mock1.SetControlledLocally(false);
+            manager.UnsetLocalEntity(1);
+            
+            for (int i = 0; i < 20; ++i)
+            {
+                manager.Tick();
+            }
+            
+            Assert.AreEqual(20, clientHearatbeatSends);
+            Assert.AreEqual(0, clientSends);
+            Assert.AreEqual(0, serverSends);
+            Assert.AreEqual(0, serverWorldSends);
         }
     }
 }

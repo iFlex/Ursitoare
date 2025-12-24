@@ -76,6 +76,13 @@ namespace DefaultNamespace
                     
                     ReportToServerUnreliable(tickId, data);
                 };
+                predictionManager.clientHeartbeadSender = (tickId) =>
+                {
+                    if (MSG_DEBUG)
+                        Debug.Log($"[PredictionMirrorBridge][clientHeartbeadSender] SEND client_heartbeat: tickId:{tickId}");
+
+                    ReportHeartbeatToServerUnreliable(tickId);
+                };
             }
             
             if (isServer)
@@ -169,6 +176,14 @@ namespace DefaultNamespace
             {
                 PredictedEntityVisuals.SHOW_DBG = !PredictedEntityVisuals.SHOW_DBG;
             }
+        }
+
+        [Command(requiresAuthority = false, channel = Channels.Unreliable)]
+        void ReportHeartbeatToServerUnreliable(uint tickId, NetworkConnectionToClient sender = null)
+        {
+            if (MSG_DEBUG)
+                Debug.Log($"[PredictionMirrorBridge][ReportHeartbeatToServerUnreliable] Received client_heartbeat: tickId:{tickId} sender:{sender}");
+            predictionManager.OnHeartbeatReceived(sender.connectionId, tickId);
         }
 
         [Command(requiresAuthority = false, channel = Channels.Unreliable)]

@@ -26,6 +26,8 @@ namespace Prediction
         public bool useBuffering = true;
         public int bufferFullThreshold = 3; //Number of ticks to buffer before starting to send out the updates
         private bool bufferFilled = false;
+
+        public bool snapBufferWhenFull = false;
         
         //NOTE: if the client updates buffer grows past a certain threshold
         //that means the server has fallen behind time wise. So we should snap ahead to the latest client state.
@@ -71,7 +73,7 @@ namespace Prediction
                 maxClientDelay = maxDelay;
             }
             
-            if (inputQueue.GetFill() == inputQueue.GetCapacity())
+            if (snapBufferWhenFull && inputQueue.GetFill() == inputQueue.GetCapacity())
             {
                 //Buffer full, skip all
                 SnapToLatest();

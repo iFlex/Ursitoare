@@ -45,7 +45,6 @@ namespace Prediction.Tests
             
             entity = new ServerPredictedEntity(0 , 20, rigidbody, test, new []{component}, new[]{component});
             physicsController = new MockPhysicsController();
-
             entity.useBuffering = false;
         }
 
@@ -484,36 +483,6 @@ namespace Prediction.Tests
             Assert.AreEqual(0, entity.inputQueue.GetFill());
         }
         
-        //TODO: test new mechanism for catching up
-        [Test]
-        public void TestBufferSkipAheadDuringNormalOp()
-        {
-            int count = 20;
-            for (int i = 0; i < count * 2; i++)
-            {
-                entity.BufferClientTick((uint)i, reports[i % reports.Length]);
-                if (i % 2 == 0)
-                {
-                    entity.ServerSimulationTick();
-                }
-
-                if (i > 0 && i % count == 0)
-                {
-                    Assert.AreEqual(1, entity.inputQueue.GetFill());
-                }
-                else
-                {
-                    int chk = (i < count) ? i : 1 + i % count;
-                    Assert.AreEqual(chk, entity.inputQueue.GetFill());
-                }
-
-                if (i % 2 == 0)
-                {
-                    entity.SamplePhysicsState();
-                }
-            }
-        }
-        
         [Test]
         public void TestBufferNeverSkipAheadDuringNormalOp()
         {
@@ -527,10 +496,74 @@ namespace Prediction.Tests
             }
         }
         
-        //TODO: test buffer too big, skip ahead 2...
         [Test]
-        public void TestBufferSkipAheadWhenSlowlyFallingBehind()
+        public void TestBufferSkipAheadWhenSlowlyFallingBehind_2()
         {
+            uint svTick = 0;
+            entity = new ServerPredictedEntity(0 , 21, rigidbody, test, new []{component}, new[]{component});
+            entity.catchup = true;
+            Assert.AreEqual(8, entity.ticksPerCatchupSection);
+            
+            for (int i = 1; i <= 7; i++)
+            {
+                entity.BufferClientTick((uint) i, reports[i % reports.Length]);
+            }
+            entity.BufferClientTick((uint) 8, reports[8 % reports.Length]);
+            entity.BufferClientTick((uint) 9, reports[9 % reports.Length]);
+            entity.BufferClientTick((uint) 10, reports[9 % reports.Length]);
+            //Note Tick should advance by 2 here.
+
+            for (int i = 1; i <= 5; ++i)
+            {
+                svTick = entity.ServerSimulationTick();
+                Assert.AreEqual(i * 2, svTick);
+            }
+        }
+        
+        [Test]
+        public void TestBufferSkipAheadWhenSlowlyFallingBehind_3()
+        {
+            uint svTick = 0;
+            entity = new ServerPredictedEntity(0 , 21, rigidbody, test, new []{component}, new[]{component});
+            entity.catchup = true;
+            Assert.AreEqual(8, entity.ticksPerCatchupSection);
+            
+            for (int i = 1; i <= 16; i++)
+            {
+                entity.BufferClientTick((uint) i, reports[i % reports.Length]);
+            }
+            entity.BufferClientTick((uint) 17, reports[8 % reports.Length]);
+            entity.BufferClientTick((uint) 18, reports[9 % reports.Length]);
+            
+            //Note Tick should advance by 3 here.
+            for (int i = 1; i <= 6; ++i)
+            {
+                svTick = entity.ServerSimulationTick();
+                Assert.AreEqual(i * 3, svTick);
+            }
+        }
+        
+        [Test]
+        public void TestBufferSkipAheadWithOverflow()
+        {
+            uint svTick = 0;
+            entity = new ServerPredictedEntity(0 , 21, rigidbody, test, new []{component}, new[]{component});
+            entity.catchup = true;
+            entity.useBuffering = true;
+            entity.snapBufferWhenFull = false;
+            
+            Assert.AreEqual(8, entity.ticksPerCatchupSection);
+            
+            for (int i = 1; i <= 25; i++)
+            {
+                entity.BufferClientTick((uint) i, reports[i % reports.Length]);
+            }
+
+            for (int i = 7; i <=25; i += 3)
+            {
+                svTick = entity.ServerSimulationTick();
+                Assert.AreEqual(i, svTick);
+            }
         }
     }
 }

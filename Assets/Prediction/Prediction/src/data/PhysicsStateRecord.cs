@@ -6,10 +6,20 @@ namespace Prediction.data
     {
         public uint tickId;
         public Vector3 position;
-        public Quaternion rotation;
+        public Quaternion rotation = Quaternion.identity;
         public Vector3 velocity;
         public Vector3 angularVelocity;
         public PredictionInputRecord input;
+
+        public void Empty()
+        {
+            tickId = 0;
+            position = Vector3.zero;
+            rotation = Quaternion.identity;
+            velocity = Vector3.zero;
+            angularVelocity = Vector3.zero;
+            input = null;
+        }
 
         public void From(Rigidbody rigidbody)
         {
