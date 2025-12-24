@@ -20,7 +20,7 @@ namespace Prediction.policies.singleInstance
             //distResimThreshold = 0.0001f; //lots of resims
             maxResimulationDelta = 1f;
             
-            maxAngleDelta = 1f;
+            maxAngleDelta = 0.01f;
             maxVeloAngleDelta = 0;
             maxAngularVeloMagDelta = 0;
         }
@@ -29,7 +29,7 @@ namespace Prediction.policies.singleInstance
         {
             distResimThreshold = dist;
             maxResimulationDelta = 1f;
-            maxAngleDelta = 1f;
+            maxAngleDelta = 0.01f;
             maxVeloAngleDelta = 0;
             maxAngularVeloMagDelta = 0;
         }
@@ -52,6 +52,7 @@ namespace Prediction.policies.singleInstance
                 if (dist > maxResimulationDelta)
                 {
                     //return PredictionDecision.SNAP;
+                    return PredictionDecision.RESIMULATE;
                 }
                 if (dist > distResimThreshold)
                 {

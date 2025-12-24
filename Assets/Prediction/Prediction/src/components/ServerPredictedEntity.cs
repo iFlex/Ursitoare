@@ -266,6 +266,11 @@ namespace Prediction
             if (inputQueue.GetFill() == 0)
                 bufferFilled = false;
         }
+
+        public int BufferFill()
+        {
+            return inputQueue.GetFill();
+        }
         
         public uint BufferSize()
         {
