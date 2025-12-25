@@ -53,8 +53,14 @@ namespace Prediction
         
         public void LoadInput(PredictionInputRecord input)
         {
+            input.ReadReset();
+            //NOTE: loading in the exact same order all the time on both server and client is critical!
+            //NOTE: at the moment all components must read their data even if not using it...
             for (int i = 0; i < controllablePredictionContributors.Length; ++i)
             {
+                //TODO: what about skipping invalid input!?!?!
+                //TODO: what about adding & removing components?
+                //TODO: what about new components? always add at the end for compatibility?
                 controllablePredictionContributors[i].LoadInput(input);
             }
         }

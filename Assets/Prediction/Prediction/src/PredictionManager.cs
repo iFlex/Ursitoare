@@ -29,6 +29,7 @@ namespace Prediction
         private uint localEntityId;
         
         //TODO: protected
+        //TODO: you don't need this anymore if each entity can provide you with their id...
         public Dictionary<ServerPredictedEntity, uint> _serverEntityToId = new Dictionary<ServerPredictedEntity, uint>();
         private Dictionary<uint, ServerPredictedEntity> _idToServerEntity = new Dictionary<uint, ServerPredictedEntity>();
         private Dictionary<ServerPredictedEntity, int> _entityToOwnerConnId = new Dictionary<ServerPredictedEntity, int>();
@@ -149,22 +150,41 @@ namespace Prediction
         {
             Instance = null;
         }
-
+        
+        //TODO: unit test!
+        //TODO: detect noops!
         public void SetEntityOwner(ServerPredictedEntity entity, int ownerId)
         {
             if (entity == null)
                 return;
             
-            int prevConnId = _entityToOwnerConnId.GetValueOrDefault(entity, 0);
-            Debug.Log($"[PredictionManager][SetEntityOwner] SERVER ({entity.id}) prev:{prevConnId} ownerId:{ownerId} entity:{entity}");
+            UnsetOwnership(ownerId);
+            UnsetOwnership(entity);
+            Debug.Log($"[PredictionManager][SetEntityOwner] SERVER ({entity.id}) ownerId:{ownerId} entity:{entity}");
+            SetOwnership(entity, ownerId);
+        }
 
-            if (prevConnId == ownerId)
+        void UnsetOwnership(ServerPredictedEntity entity)
+        {
+            UnsetOwnership(_entityToOwnerConnId.GetValueOrDefault(entity, 0));    
+        }
+        
+        void UnsetOwnership(int ownerId)
+        {
+            if (ownerId == 0)
                 return;
             
-            if (prevConnId != 0)
+            ServerPredictedEntity entity = _connIdToEntity.GetValueOrDefault(ownerId, null);
+            Debug.Log($"[PredictionManager][UnsetOwnership] SERVER ownerId:{ownerId} entity:{entity}");
+            _connIdToEntity.Remove(ownerId);
+            if (entity != null)
             {
-                _connIdToEntity.Remove(prevConnId);
+                _entityToOwnerConnId[entity] = 0; //Back to server ownership
             }
+        }
+
+        void SetOwnership(ServerPredictedEntity entity, int ownerId)
+        {
             _entityToOwnerConnId[entity] = ownerId;
             if (ownerId != 0)
             {
@@ -231,8 +251,7 @@ namespace Prediction
             {
                 _worldStateRecord.Resize(_serverEntityToId.Count);
             }
-            if (DEBUG)
-                Debug.Log($"[PredictionManager][RemovePredictedEntity] entity:{entity}");
+            Debug.Log($"[PredictionManager][RemovePredictedEntity] entity:{entity}");
         }
 
         public void RemovePredictedEntity(uint id)
