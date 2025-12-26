@@ -1,4 +1,6 @@
-﻿namespace Prediction.utils
+﻿using System;
+
+namespace Prediction.utils
 {
     public class RingBuffer<T>
     {
@@ -93,6 +95,11 @@
 
         public T Get(int index)
         {
+            if (buffer.Length == 0)
+                throw new Exception("EMPTY_BUFFER");
+            if (index < 0)
+                throw new Exception("NEGATIVE_INDEX");
+            
             index %= buffer.Length;
             return buffer[index];
         }

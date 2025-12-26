@@ -53,10 +53,14 @@ namespace Prediction.Simulation
             mainResimulationEntity = entity;
         }
     
-        public void Rewind(uint ticks)
+        public bool Rewind(uint ticks)
         {
+            if (tickId < ticks)
+                return false;
+            
             tickId -= ticks;
             ApplyWorldState(tickId);
+            return true;
         }
 
         public void AfterResimulate(ClientPredictedEntity entity)
@@ -88,7 +92,7 @@ namespace Prediction.Simulation
             RingBuffer<PhysicsStateRecord> ringBuffer = new RingBuffer<PhysicsStateRecord>(bufferSize);
             for (int i = 0; i < bufferSize; i++)
             {
-                ringBuffer.Set(i, new PhysicsStateRecord());
+                ringBuffer.Set(i, (new PhysicsStateRecord()).Empty());
             }
             worldHistory[rigidbody] = ringBuffer;
             rigidbody.maxDepenetrationVelocity = MAX_DEPENTRATION_SPEED;

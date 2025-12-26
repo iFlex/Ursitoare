@@ -11,7 +11,7 @@ namespace Prediction.data
         public Vector3 angularVelocity;
         public PredictionInputRecord input;
 
-        public void Empty()
+        public PhysicsStateRecord Empty()
         {
             tickId = 0;
             position = Vector3.zero;
@@ -19,6 +19,7 @@ namespace Prediction.data
             velocity = Vector3.zero;
             angularVelocity = Vector3.zero;
             input = null;
+            return this;
         }
 
         public void From(Rigidbody rigidbody)

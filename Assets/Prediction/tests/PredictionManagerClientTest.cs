@@ -36,7 +36,7 @@ namespace Prediction.Tests
 
             clientSends = clientHearatbeatSends = serverWorldSends = serverSends = 0;
             manager = new PredictionManager();
-            PredictionManager.PHYSICS_CONTROLLED = physicsController;
+            PredictionManager.PHYSICS_CONTROLLER = physicsController;
             manager.clientStateSender = (a, b) => { clientSends++; };
             manager.clientHeartbeadSender = (a) => { clientHearatbeatSends++; };
             manager.serverStateSender = (a, b, c) => { serverSends++;  };
@@ -162,7 +162,7 @@ namespace Prediction.Tests
                 {
                     manager.OnServerStateReceived(1, serverTicks[tickId - serverDelay]);
                 }
-                Assert.AreEqual(tickId, manager.lastClientAppliedTick);
+                Assert.AreEqual(tickId, manager.tickId);
             }
             
             Assert.AreEqual(serverTicks[serverTicks.Length - 1].position, rigidbody.position);

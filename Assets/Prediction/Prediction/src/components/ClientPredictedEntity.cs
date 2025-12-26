@@ -194,12 +194,20 @@ namespace Prediction
             return resimulationEligibilityCheckHook(serverState.tickId, localStateBuffer, serverStateBuffer);
         }
 
+        public uint lastSvTickId = 0;
+        public uint oldServerTickCount = 0;
         bool AddServerState(uint lastAppliedTick, PhysicsStateRecord serverRecord)
         {
             if (DEBUG)
                 Debug.Log($"[ClientPreditedEntity][AddServerState]({id}) data:{serverRecord}");
+            
             //TODO: use lastAppliedTick to determine how old the update is and do stuff about it
+            if (serverRecord.tickId < serverStateBuffer.GetEndTick())
+            {
+                oldServerTickCount++;
+            }
             serverStateBuffer.Add(serverRecord.tickId, serverRecord);
+            lastSvTickId = serverStateBuffer.GetEndTick();
             return serverRecord.tickId == serverStateBuffer.GetEndTick();
         }
         
@@ -219,13 +227,15 @@ namespace Prediction
             PhysicsStateRecord serverState = serverStates.Get(tickId);
             return singleStateResimulationEligibilityHook.Invoke(localState, serverState);
         }
-        
+
+        public uint countMissingServerHistory = 0;
         public void SnapToServer(uint tickId)
         {
             PhysicsStateRecord state = serverStateBuffer.Get(tickId);
             if (state == null)
             {
                 //TODO: do we need to do something?
+                countMissingServerHistory++;
                 return;
             }
             SnapTo(state);

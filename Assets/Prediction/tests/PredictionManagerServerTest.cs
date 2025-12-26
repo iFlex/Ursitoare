@@ -51,9 +51,9 @@ namespace Prediction.Tests
             serverEntity2.useBuffering = false;
 
             clientSends = clientHearatbeatSends = serverWorldSends = serverSends = 0;
-            PredictionManager.PHYSICS_CONTROLLED = physicsController;
+            PredictionManager.PHYSICS_CONTROLLER = physicsController;
             manager = new PredictionManager();
-            PredictionManager.PHYSICS_CONTROLLED = physicsController;
+            PredictionManager.PHYSICS_CONTROLLER = physicsController;
             manager.clientStateSender = (a, b) => { clientSends++; };
             manager.clientHeartbeadSender = (a) => { clientHearatbeatSends++; };
             manager.serverStateSender = (a, b, c) => { serverSends++; };

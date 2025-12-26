@@ -19,7 +19,7 @@ namespace Prediction
         //TODO: validate presence of all static providers
         public static Func<VisualsInterpolationsProvider> INTERPOLATION_PROVIDER = () => new MovingAverageInterpolator();
         public static SingleSnapshotInstanceResimChecker SNAPSHOT_INSTANCE_RESIM_CHECKER = new SimpleConfigurableResimulationDecider();
-        public static PhysicsController PHYSICS_CONTROLLED = new RewindablePhysicsController();
+        public static PhysicsController PHYSICS_CONTROLLER = new RewindablePhysicsController();
         
         //TODO: do we still need this?
         public static Func<double> ROUND_TRIP_GETTER;
@@ -42,12 +42,11 @@ namespace Prediction
         
         private bool isClient;
         private bool isServer;
-        private uint tickId;
         //TODO: package private
-        public uint lastClientAppliedTick;
+        public uint tickId = 1;
         private bool setup = false;
         public bool autoTrackRigidbodies = true;
-        public bool useServerWorldStateMessage = true;
+        public bool useServerWorldStateMessage = false;
 
         //NOTE: heartbeats are only sent when no predicted entity is controlled locally
         //         tickId
@@ -93,7 +92,7 @@ namespace Prediction
             this.isServer = isServer;
             this.isClient = isClient;
             Validate();
-            PHYSICS_CONTROLLED.Setup(isServer);
+            PHYSICS_CONTROLLER.Setup(isServer);
             Debug.Log($"[PredictionManager] isServer:{isServer} isClient:{isClient}");
         }
 
@@ -146,7 +145,7 @@ namespace Prediction
                 }   
             }
 
-            if (PHYSICS_CONTROLLED == null)
+            if (PHYSICS_CONTROLLER == null)
             {
                 throw new Exception(
                     "INVALID_CONFIG: No Physics Controller provided.");
@@ -210,7 +209,14 @@ namespace Prediction
                 _connIdToEntity.Remove(ownerId);
                 _entityToOwnerConnId.Remove(entity);
                 entity.Reset(); //Prepare for new stream of tickIds
-                serverSetControlledLocally.Invoke(ownerId, entity.id, false);
+                try
+                {
+                    serverSetControlledLocally.Invoke(ownerId, entity.id, false);
+                }
+                catch (Exception e)
+                {
+                    //TODO: event
+                }
             }
         }
     
@@ -260,7 +266,7 @@ namespace Prediction
             
             if (autoTrackRigidbodies)
             {
-                PHYSICS_CONTROLLED.Track(entity.rigidbody);
+                PHYSICS_CONTROLLER.Track(entity.rigidbody);
             }
         }
         
@@ -301,7 +307,7 @@ namespace Prediction
                 _predictedEntities.Remove(ent.gameObject.GetComponent<PredictedEntity>());
                 if (autoTrackRigidbodies)
                 {
-                    PHYSICS_CONTROLLED.Untrack(ent.rigidbody);
+                    PHYSICS_CONTROLLER.Untrack(ent.rigidbody);
                 }
             }
             if (id == localEntityId && isClient)
@@ -331,20 +337,17 @@ namespace Prediction
             
             if (DEBUG)
                 Debug.Log($"[PredictionManager][SetLocalEntity]({id})");
+
+            if (localEntityId == id)
+                return;
             
-            if (localEntity != null)
-            {
-                localEntity.SetControlledLocally(false);
-            }
-            
+            UnsetLocalEntity();
             localEntity = _clientEntities.GetValueOrDefault(id, null);
-            localEntityId = 0;
             if (localEntity != null)
             {
                 //FUDO: consider moving the id fetching mechanic inside entity
                 localEntityId = id;
                 localGO = localEntity.gameObject;
-                lastClientAppliedTick = 0;
                 localEntity.SetControlledLocally(true);
             }
         }
@@ -370,8 +373,9 @@ namespace Prediction
             {
                 localEntity.SetControlledLocally(false);
             }
-            localEntity = null;
             localEntityId = 0;
+            localEntity = null;
+            localGO = null;
         }
 
         public ClientPredictedEntity GetLocalEntity()
@@ -386,12 +390,12 @@ namespace Prediction
             if (!setup) 
                 return;
             
-            tickId++;
             ClientPreSimTick();
             ServerPreSimTick();
-            PHYSICS_CONTROLLED.Simulate();
+            PHYSICS_CONTROLLER.Simulate();
             ClientPostSimTick();
             ServerPostSimTick();
+            tickId++;
         }
 
         int PredictionDecisionToInt(PredictionDecision decision)
@@ -427,7 +431,7 @@ namespace Prediction
             foreach (KeyValuePair<uint, ClientPredictedEntity> pair in _clientEntities)
             {
                 PredictionDecision decision =
-                    pair.Value.GetPredictionDecision(lastClientAppliedTick, out uint localFromTick);
+                    pair.Value.GetPredictionDecision(tickId, out uint localFromTick);
                 int crnt = PredictionDecisionToInt(decision);
                 if (crnt > decisionCode)
                 {
@@ -498,16 +502,29 @@ namespace Prediction
         
         //TODO: unit test this
         public bool correctWholeWorldWhenResimulating = true;
+        public uint resimSkipNotEnoughHistory = 0;
+        public bool resimulating = false;
         void Resimulate(uint startTick)
         {
-            PHYSICS_CONTROLLED.BeforeResimulate(null);
-            PHYSICS_CONTROLLED.Rewind(lastClientAppliedTick - startTick);
+            if (tickId < startTick)
+            {
+                resimSkipNotEnoughHistory++;
+                return;
+            }
+
+            resimulating = true;
+            PHYSICS_CONTROLLER.BeforeResimulate(null);
+            if (!PHYSICS_CONTROLLER.Rewind(tickId - startTick))
+            {
+                resimSkipNotEnoughHistory++;
+                return;
+            }
             resimulation.Dispatch(true);
             
             //Snap to correct state reported by server for all relevant objects
             foreach (KeyValuePair<uint, ClientPredictedEntity> pair in _clientEntities)
             {
-                if (correctWholeWorldWhenResimulating || pair.Value.GetPredictionDecision(lastClientAppliedTick, out uint localFromTick) == PredictionDecision.RESIMULATE)
+                if (correctWholeWorldWhenResimulating || pair.Value.GetPredictionDecision(tickId, out uint localFromTick) == PredictionDecision.RESIMULATE)
                 {
                     pair.Value.SnapToServer(startTick);
                     pair.Value.PostResimulationStep(startTick);
@@ -515,13 +532,13 @@ namespace Prediction
             }
             
             uint index = startTick + 1;
-            while (index <= lastClientAppliedTick)
+            while (index <= tickId)
             {
                 foreach (KeyValuePair<uint, ClientPredictedEntity> pair in _clientEntities)
                 {
                     pair.Value.PreResimulationStep(index);
                 }
-                PHYSICS_CONTROLLED.Resimulate(null);
+                PHYSICS_CONTROLLER.Resimulate(null);
                 foreach (KeyValuePair<uint, ClientPredictedEntity> pair in _clientEntities)
                 {
                     pair.Value.PostResimulationStep(index);
@@ -534,7 +551,8 @@ namespace Prediction
             
             totalResimulations++;
             resimulation.Dispatch(false);
-            PHYSICS_CONTROLLED.AfterResimulate(null);
+            PHYSICS_CONTROLLER.AfterResimulate(null);
+            resimulating = false;
         }
 
         //TODO: unit test this
@@ -542,13 +560,14 @@ namespace Prediction
         {
             foreach (KeyValuePair<uint, ClientPredictedEntity> pair in _clientEntities)
             {
-                if (pair.Value.GetPredictionDecision(lastClientAppliedTick, out uint localFromTick) == PredictionDecision.SNAP)
+                if (pair.Value.GetPredictionDecision(tickId, out uint localFromTick) == PredictionDecision.SNAP)
                 {
                     pair.Value.SnapToServer(localFromTick);
                 }
             } 
         }
-        
+
+        public uint clientSendErrors = 0;
         void ClientPreSimTick()
         {
             if (isClient)
@@ -557,13 +576,12 @@ namespace Prediction
                 ClientResimulationCheckPass();
                 foreach (KeyValuePair<uint, ClientPredictedEntity> pair in _clientEntities)
                 {
-                    if (pair.Value == localEntity)
+                    if (pair.Key == localEntityId)
                     {
                         if (DEBUG)
                             Debug.Log($"[PredictionManager][ClientPreSimTick] Client:{pair.Value} tick:{tickId}");
                         
                         PredictionInputRecord tickInputRecord = pair.Value.ClientSimulationTick(tickId);
-                        lastClientAppliedTick = tickId;
                         if (!isServer)
                         {
                             try
@@ -574,6 +592,7 @@ namespace Prediction
                             }
                             catch (Exception e)
                             {
+                                clientSendErrors++;
                                 EntityProcessingError err;
                                 err.exception = e;
                                 err.entityId = pair.Value.id;
@@ -584,7 +603,6 @@ namespace Prediction
                     else if (!isServer)
                     {
                         //Only run this on the pure client yo... 
-                        //Uses tickId 
                         pair.Value.ClientFollowerSimulationTick(tickId);
                     }
                 }
@@ -598,7 +616,15 @@ namespace Prediction
 
         void SendSpectatorHeartbeat(uint tickId)
         {
-            clientHeartbeadSender?.Invoke(tickId);
+            try
+            {
+                clientHeartbeadSender?.Invoke(tickId);
+            }
+            catch (Exception e)
+            {
+                clientSendErrors++;
+                //TODO: event?
+            }   
         }
 
         void ClientPostSimTick()
@@ -712,7 +738,7 @@ namespace Prediction
             ClientPredictedEntity entity = _clientEntities.GetValueOrDefault(entityId, null);
             if (entity != null && (entityId == localEntityId || (isClient && !isServer)))
             {
-                entity.BufferServerTick(lastClientAppliedTick, stateRecord);
+                entity.BufferServerTick(tickId, stateRecord);
             }
         }
 
@@ -831,14 +857,12 @@ namespace Prediction
         
         public uint GetTotalTicks()
         {
-            return lastClientAppliedTick;
+            return tickId;
         }
         
         public uint GetAverageResimPerTick()
         {
-            if (lastClientAppliedTick == 0)
-                return 0;
-            return totalResimulationSteps / lastClientAppliedTick;
+            return totalResimulationSteps / tickId;
         }
         
         public SafeEventDispatcher<ServerUpdateSendError> onServerStateSendError = new();

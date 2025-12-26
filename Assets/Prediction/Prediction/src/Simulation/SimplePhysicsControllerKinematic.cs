@@ -50,8 +50,9 @@ namespace Prediction.Simulation
             entity.rigidbody.isKinematic = false;
         }
 
-        public void Rewind(uint ticks)
+        public bool Rewind(uint ticks)
         {
+            return true;
         }
 
         public void Resimulate(ClientPredictedEntity entity)

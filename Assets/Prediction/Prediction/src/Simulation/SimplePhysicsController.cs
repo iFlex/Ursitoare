@@ -19,8 +19,9 @@ namespace Prediction.Simulation
             //NOOP
         }
 
-        public void Rewind(uint ticks)
+        public bool Rewind(uint ticks)
         {
+            return true;
         }
 
         public void Resimulate(ClientPredictedEntity entity)
