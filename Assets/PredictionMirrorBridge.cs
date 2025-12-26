@@ -174,18 +174,6 @@ namespace DefaultNamespace
 
         void Update()
         {
-            if (serverText)
-            {
-                serverText.text = $"NetLayer:: Latency:{SingletonUtils.instance.latencySim.latency} Jitter:{SingletonUtils.instance.latencySim.jitter} TicksPerSection:{((localPredMono == null || localPredMono.GetServerEntity() == null) ? "x" : localPredMono.GetServerEntity().ticksPerCatchupSection)} stCnt:{PredictionManager.Instance.clientStatesReceived} FlwrWindowSz:{MovingAverageInterpolator.FOLLOWER_SMOOTH_WINDOW}\n";
-                //TODO: make _serverEntityToId private again
-                foreach (KeyValuePair<ServerPredictedEntity, uint> pair in predictionManager._serverEntityToId)
-                {
-                    //TODO: NOTE: i think elements remain in the buffer somehow and cause the range: reading to be incorrect and keep going up...
-                    int cid = predictionManager.GetOwner(pair.Key);
-                    serverText.text += $"connId:{cid} id:{pair.Value} tickId:{pair.Key.GetTickId()} lastConnTick:{predictionManager._connIdToLatestTick.GetValueOrDefault(cid, uint.MaxValue)} ticksNoInpt:{pair.Key.ticksWithoutInput} bfrTicks:{pair.Key.totalBufferingTicks} bfrWipe:{pair.Key.catchupBufferWipes} catchup:{pair.Key.catchupTicks} skipped:{pair.Key.ticksPerCatchupSection} range:{pair.Key.BufferSize()} fill:{pair.Key.BufferFill()} inputJumps:{pair.Key.inputJumps} maxDelay:{pair.Key.maxClientDelay} rcvCnt:{pair.Key.clUpdateCount} rcv+cnt:{pair.Key.clAddedUpdateCount}\n";
-                }
-            }
-
             if (Input.GetKeyDown(KeyCode.Space))
             {
                 PredictedEntityVisuals.SHOW_DBG = !PredictedEntityVisuals.SHOW_DBG;

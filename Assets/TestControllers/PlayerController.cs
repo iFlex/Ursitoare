@@ -93,46 +93,6 @@ public abstract class PlayerController : NetworkBehaviour, PredictableComponent,
             pcam.Follow = predictedMono.visuals.transform;
             SingletonUtils.instance.topCam.Follow = predictedMono.visuals.transform;
         }
-        
-        if (predictedMono.IsControlledLocally() && SingletonUtils.instance.clientText)
-        {
-            SingletonUtils.instance.clientText.text = $"ID:{predictedMono.clientPredictedEntity.id} RESIMULATING:{PredictionManager.Instance.resimulating}\n" +
-                                                      $"Tick:{PredictionManager.Instance.tickId} | {predictedMono.clientPredictedEntity.lastTick}\n " + 
-                                                      $"ServerDelay:{predictedMono.clientPredictedEntity.GetServerDelay()} | STick:{predictedMono.clientPredictedEntity.serverStateBuffer.GetEndTick()}\n " +
-                                                      $"sv_oldTicks:{predictedMono.clientPredictedEntity.oldServerTickCount}\n " +
-                                                      $"Resimulations:{PredictionManager.Instance.totalResimulations}\n " +
-                                                      $"AuthResims:{PredictionManager.Instance.totalResimulationsDueToAuthority}\n " +
-                                                      $"FlwrResims:{PredictionManager.Instance.totalResimulationsDueToFollowers}\n " +
-                                                      $"BothResims:{PredictionManager.Instance.totalResimulationsDueToBoth}\n " +
-                                                      $"AvgResimLen:{PredictionManager.Instance.GetAverageResimPerTick()}\n" +
-                                                      $"TotalResimSteps:{PredictionManager.Instance.totalResimulationSteps} ({(float)PredictionManager.Instance.totalResimulationSteps / PredictionManager.Instance.tickId * 100}%)\n " +
-                                                      $"ResimSkips:{PredictionManager.Instance.totalResimulationsSkipped}\n " +
-                                                      $"ResimSkipsTooSoon:{PredictionManager.Instance.resimSkipNotEnoughHistory}\n " +
-                                                      $"MaxResimOverbudget:{PredictionManager.Instance.maxResimulationOverbudget}\n " +
-                                                      $"MaxSvDelay:{predictedMono.clientPredictedEntity.maxServerDelay}\n " +
-                                                      $"Velo:{predictedMono.clientPredictedEntity.rigidbody.linearVelocity.magnitude}\n " +
-                                                      $"SvMissingHist:{predictedMono.clientPredictedEntity.countMissingServerHistory}\n " +
-                                                      $"DIST_TRES:{((SimpleConfigurableResimulationDecider)PredictionManager.SNAPSHOT_INSTANCE_RESIM_CHECKER).distResimThreshold}\n " +
-                                                      $"SMOOTH_WNDW:{(SingletonUtils.localVisInterpolator != null ? SingletonUtils.localVisInterpolator.slidingWindowTickSize : -1)}\n " +
-                                                      $"FPS:{1/Time.deltaTime}\n " +
-                                                      $"FrameTime:{Time.deltaTime}\n";
-
-            foreach (PredictedEntity pe in PredictionManager.Instance._predictedEntities)
-            {
-                if (pe.GetClientEntity().gameObject != predictedMono.gameObject)
-                {
-                    PredictedEntityVisuals pev = pe.GetVisualsControlled();
-                    MovingAverageInterpolator vip = null;
-                    if (pev)
-                    {
-                        vip = (MovingAverageInterpolator) pev.interpolationProvider;
-                    }
-                    
-                    SingletonUtils.instance.clientText.text +=
-                        $"\nid:{pe.GetId()} ResimTicksAuth:{pe.GetClientEntity().resimTicksAsAuthority} ResimTicksFlwr:{pe.GetClientEntity().resimTicksAsFollower} smthWindow:{(vip == null ? "" : vip.slidingWindowTickSize)} noSvHst:{pe.GetClientEntity().countMissingServerHistory}\n";
-                }
-            }
-        }
     }
     
     public abstract void ApplyForces();

@@ -40,8 +40,8 @@ namespace Prediction
         public HashSet<PredictedEntity> _predictedEntities = new HashSet<PredictedEntity>();
         private HashSet<GameObject> _predictedEntitiesGO = new HashSet<GameObject>();
         
-        private bool isClient;
-        private bool isServer;
+        public bool isClient;
+        public bool isServer;
         //TODO: package private
         public uint tickId = 1;
         private bool setup = false;
