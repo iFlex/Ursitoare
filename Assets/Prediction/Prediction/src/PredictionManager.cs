@@ -438,6 +438,7 @@ namespace Prediction
         }
         
         //TODO: package private
+        //TODO: ability to only resimulate for locally controlled object
         public PredictionDecision ComputePredictionDecision(out uint resimFromTickId)
         {
             int decisionCode = 0;
@@ -518,10 +519,12 @@ namespace Prediction
             }
         }
         
-        //TODO: unit test this
+        //TODO: unit test this!!!
         public bool correctWholeWorldWhenResimulating = true;
         public uint resimSkipNotEnoughHistory = 0;
         public bool resimulating = false;
+        public uint maxRewindDistance = 0;
+        public uint totalRewindDistance = 0;
         void Resimulate(uint startTick)
         {
             if (!DO_RESIM)
@@ -535,11 +538,19 @@ namespace Prediction
 
             resimulating = true;
             PHYSICS_CONTROLLER.BeforeResimulate(null);
-            if (!PHYSICS_CONTROLLER.Rewind(tickId - startTick))
+            uint rewind = tickId - startTick;
+            if (!PHYSICS_CONTROLLER.Rewind(rewind))
             {
                 resimSkipNotEnoughHistory++;
+                resimulating = false;
                 return;
             }
+            
+            if (maxRewindDistance < rewind)
+            {
+                maxRewindDistance = rewind;
+            }
+            totalRewindDistance += rewind;
             resimulation.Dispatch(true);
             
             //Snap to correct state reported by server for all relevant objects
@@ -553,7 +564,7 @@ namespace Prediction
             }
             
             uint index = startTick + 1;
-            while (index <= tickId)
+            while (index < tickId)
             {
                 foreach (KeyValuePair<uint, ClientPredictedEntity> pair in _clientEntities)
                 {
