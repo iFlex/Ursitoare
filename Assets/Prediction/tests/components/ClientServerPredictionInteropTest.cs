@@ -49,7 +49,7 @@ namespace Prediction.Tests
             serverComponent.rigidbody = serverRigidbody;
             
             serverEntity = new ServerPredictedEntity(0 ,20, serverRigidbody, server, new []{serverComponent}, new[]{serverComponent});
-            serverEntity.useBuffering = false;
+            ServerPredictedEntity.USE_BUFFERING = false;
         }
         
         [Test]

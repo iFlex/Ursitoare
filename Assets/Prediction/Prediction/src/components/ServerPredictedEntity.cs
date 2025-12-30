@@ -10,7 +10,9 @@ namespace Prediction
     {
         public static bool DEBUG = false;
         public static bool APPLY_FORCES_TO_EACH_CATCHUP_INPUT = false;
-        public static bool FLUSH_BUFFER_WHEN_FULL = false;
+        public static bool USE_BUFFERING = true;
+        public static int BUFFER_FULL_THRESHOLD = 3; //Number of ticks to buffer before starting to send out the updates
+        public static bool CATCHUP = true;
         
         public GameObject gameObject;
         private PhysicsStateRecord serverStateBfr = new PhysicsStateRecord();
@@ -22,14 +24,11 @@ namespace Prediction
         //NOTE: Possible to buffer user inputs if needed to try and ensure a closer to client simulation on the server at the
         //cost of delaying the server behind the client by a small margin. The more you buffer, the more the server is delayed, the less reliable is the client image.
 
-        public bool useBuffering = true;
-        public int bufferFullThreshold = 3; //Number of ticks to buffer before starting to send out the updates
         private bool bufferFilled = false;
 
         
         //NOTE: if the client updates buffer grows past a certain threshold
         //that means the server has fallen behind time wise. So we should snap ahead to the latest client state.
-        public bool catchup = true;
         public int catchupSections = 3;
         public int ticksPerCatchupSection = 0;
         
@@ -57,6 +56,7 @@ namespace Prediction
         }
 
         DesyncEvent devt = new DesyncEvent();
+        private bool noInputAvailableForTick = false;
         void HandleTickInput()
         {
             //NOTE: this also loads TickId with the latest value
@@ -67,22 +67,8 @@ namespace Prediction
                 maxClientDelay = maxDelay;
             }
             
-            if (FLUSH_BUFFER_WHEN_FULL && inputQueue.GetFill() == inputQueue.GetCapacity())
-            {
-                //Buffer full, skip all
-                SnapToLatest();
-                inputsToApply = 1;
-                catchupBufferWipes++;
-                
-                devt.reason = DesyncReason.BUFFER_FLUSHED_DUE_TO_FULL;
-                devt.tickId = inputQueue.GetEndTick();
-                potentialDesync.Dispatch(devt);
-            }
-            else
-            {
-                inputsToApply = GetInputsCount();  
-            }
-            
+            inputsToApply = GetInputsCount();
+            noInputAvailableForTick = inputsToApply == 0;
             if (inputsToApply > 1)
             {
                 catchupTicks += (uint) inputsToApply - 1U;
@@ -131,7 +117,7 @@ namespace Prediction
                     }
                 }
             }
-            if (inputsToApply == 0)
+            if (noInputAvailableForTick)
             {
                 ticksWithoutInput++;
                 
@@ -168,7 +154,7 @@ namespace Prediction
 
         int GetInputsCount()
         {
-            if (!catchup)
+            if (!CATCHUP)
                 return 1;
             return Mathf.FloorToInt(inputQueue.GetFill() / ticksPerCatchupSection) + 1;
         }
@@ -204,17 +190,28 @@ namespace Prediction
             clUpdateCount++;
             if (clientTickId > tickId)
             {
+                if (inputQueue.GetFill() == inputQueue.GetCapacity())
+                {
+                    devt.reason = DesyncReason.TICK_OVERFLOW;
+                    devt.tickId = tickId;
+                    potentialDesync.Dispatch(devt);
+                }
+                
                 clAddedUpdateCount++;
                 inputQueue.Add(clientTickId, inputRecord);
             }
             else
             {
                 lateTickCount++;
+
+                devt.reason = DesyncReason.LATE_TICK;
+                devt.tickId = tickId;
+                potentialDesync.Dispatch(devt);
             }
 
             if (!bufferFilled)
             {
-                bufferFilled = inputQueue.GetFill() >= bufferFullThreshold;
+                bufferFilled = inputQueue.GetFill() >= BUFFER_FULL_THRESHOLD;
             }
         }
         
@@ -255,7 +252,7 @@ namespace Prediction
         //TODO: unit test the buffering
         bool CanUseBuffer()
         {
-            if (!useBuffering)
+            if (!USE_BUFFERING)
                 return true;
             
             return bufferFilled && inputQueue.GetFill() > 0;
@@ -309,7 +306,8 @@ namespace Prediction
             INPUT_JUMP = 0,
             MULTIPLE_INPUTS_PER_FRAME = 1,
             INVALID_INPUT = 2,
-            BUFFER_FLUSHED_DUE_TO_FULL = 3,
+            LATE_TICK = 3,
+            TICK_OVERFLOW = 4
         }
         public struct DesyncEvent
         {

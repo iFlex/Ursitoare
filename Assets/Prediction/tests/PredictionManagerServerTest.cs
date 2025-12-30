@@ -40,7 +40,7 @@ namespace Prediction.Tests
             serverComponent1 = new MockPredictableControllableComponent();
             serverComponent1.rigidbody = serverRigidbody1;
             serverEntity1 = new ServerPredictedEntity(1, 20, serverRigidbody1, server1, new []{serverComponent1}, new[]{serverComponent1});
-            serverEntity1.useBuffering = false;
+            ServerPredictedEntity.USE_BUFFERING = false;
             
             server2 = new GameObject("test2");
             server2.transform.position = Vector3.zero;
@@ -48,7 +48,6 @@ namespace Prediction.Tests
             serverComponent2 = new MockPredictableControllableComponent();
             serverComponent2.rigidbody = serverRigidbody2;
             serverEntity2 = new ServerPredictedEntity(2, 20, serverRigidbody2, server2, new []{serverComponent2}, new[]{serverComponent2});
-            serverEntity2.useBuffering = false;
 
             clientSends = clientHearatbeatSends = serverWorldSends = serverSends = 0;
             PredictionManager.PHYSICS_CONTROLLER = physicsController;

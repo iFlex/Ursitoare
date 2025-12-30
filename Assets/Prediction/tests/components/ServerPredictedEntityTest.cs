@@ -45,7 +45,8 @@ namespace Prediction.Tests
             
             entity = new ServerPredictedEntity(0 , 20, rigidbody, test, new []{component}, new[]{component});
             physicsController = new MockPhysicsController();
-            entity.useBuffering = false;
+            ServerPredictedEntity.USE_BUFFERING = false;
+            ServerPredictedEntity.CATCHUP = false;
         }
 
         static PredictionInputRecord[] GeneratePlayerInputReports(Vector3[] inputs)
@@ -324,8 +325,7 @@ namespace Prediction.Tests
         [Test]
         public void TestNoBuffering()
         {
-            entity.useBuffering = true;
-            entity.bufferFullThreshold = 0;
+            ServerPredictedEntity.USE_BUFFERING = false;
             
             Vector3[] serverInput =
             {
@@ -365,8 +365,8 @@ namespace Prediction.Tests
         [Test]
         public void TestBuffering()
         {
-            entity.useBuffering = true;
-            entity.bufferFullThreshold = 3;
+            ServerPredictedEntity.USE_BUFFERING = true;
+            ServerPredictedEntity.BUFFER_FULL_THRESHOLD = 3;
             
             Vector3[] serverInput =
             {
@@ -465,25 +465,6 @@ namespace Prediction.Tests
         }
         
         [Test]
-        public void TestBufferSkipAhead()
-        {
-            int count = 20;
-            for (int i = 0; i < count; i++)
-            {
-                entity.BufferClientTick((uint) i, reports[1]);
-            }
-            entity.ServerSimulationTick();
-            Assert.AreEqual(count - 1, entity.inputQueue.GetFill());
-            
-            entity.BufferClientTick((uint) count, reports[2]);
-            entity.ServerSimulationTick();
-            Assert.AreEqual(1, entity.inputQueue.GetFill());
-            Assert.AreEqual(reports[2], entity.inputQueue.GetEnd());
-            entity.SamplePhysicsState();
-            Assert.AreEqual(0, entity.inputQueue.GetFill());
-        }
-        
-        [Test]
         public void TestBufferNeverSkipAheadDuringNormalOp()
         {
             int count = 20;
@@ -499,46 +480,48 @@ namespace Prediction.Tests
         [Test]
         public void TestBufferSkipAheadWhenSlowlyFallingBehind_2()
         {
+            ServerPredictedEntity.USE_BUFFERING = false;
+            ServerPredictedEntity.CATCHUP = true;
+            
             uint svTick = 0;
             entity = new ServerPredictedEntity(0 , 21, rigidbody, test, new []{component}, new[]{component});
-            entity.catchup = true;
             Assert.AreEqual(8, entity.ticksPerCatchupSection);
             
-            for (int i = 1; i <= 7; i++)
+            for (int i = 1; i < 14; i++)
             {
                 entity.BufferClientTick((uint) i, reports[i % reports.Length]);
             }
-            entity.BufferClientTick((uint) 8, reports[8 % reports.Length]);
-            entity.BufferClientTick((uint) 9, reports[9 % reports.Length]);
-            entity.BufferClientTick((uint) 10, reports[9 % reports.Length]);
-            //Note Tick should advance by 2 here.
-
-            for (int i = 1; i <= 5; ++i)
+            
+            for (int i = 1; i <= 3; ++i)
             {
                 svTick = entity.ServerSimulationTick();
+                entity.SamplePhysicsState();
                 Assert.AreEqual(i * 2, svTick);
             }
+            svTick = entity.ServerSimulationTick();
+            Assert.AreEqual(7, svTick);
         }
         
         [Test]
         public void TestBufferSkipAheadWhenSlowlyFallingBehind_3()
         {
+            ServerPredictedEntity.USE_BUFFERING = false;
+            ServerPredictedEntity.CATCHUP = true;
+            
             uint svTick = 0;
             entity = new ServerPredictedEntity(0 , 21, rigidbody, test, new []{component}, new[]{component});
-            entity.catchup = true;
             Assert.AreEqual(8, entity.ticksPerCatchupSection);
             
-            for (int i = 1; i <= 16; i++)
+            for (int i = 1; i <= 21; i++)
             {
                 entity.BufferClientTick((uint) i, reports[i % reports.Length]);
             }
-            entity.BufferClientTick((uint) 17, reports[8 % reports.Length]);
-            entity.BufferClientTick((uint) 18, reports[9 % reports.Length]);
             
             //Note Tick should advance by 3 here.
-            for (int i = 1; i <= 6; ++i)
+            for (int i = 1; i <= 2; ++i)
             {
                 svTick = entity.ServerSimulationTick();
+                entity.SamplePhysicsState();
                 Assert.AreEqual(i * 3, svTick);
             }
         }
@@ -548,22 +531,35 @@ namespace Prediction.Tests
         {
             uint svTick = 0;
             entity = new ServerPredictedEntity(0 , 21, rigidbody, test, new []{component}, new[]{component});
-            entity.catchup = true;
-            entity.useBuffering = true;
-            ServerPredictedEntity.FLUSH_BUFFER_WHEN_FULL = false;
+            ServerPredictedEntity.CATCHUP = true;
+            ServerPredictedEntity.USE_BUFFERING = false;
             
             Assert.AreEqual(8, entity.ticksPerCatchupSection);
             
-            for (int i = 1; i <= 25; i++)
+            for (int i = 1; i <= 31; i++)
             {
                 entity.BufferClientTick((uint) i, reports[i % reports.Length]);
             }
 
-            for (int i = 7; i <=25; i += 3)
+            for (int i = 13; i <= 16; i += 3)
             {
                 svTick = entity.ServerSimulationTick();
+                entity.SamplePhysicsState();
                 Assert.AreEqual(i, svTick);
             }
+            for (int i = 18; i <= 25; i += 2)
+            {
+                svTick = entity.ServerSimulationTick();
+                entity.SamplePhysicsState();
+                Assert.AreEqual(i, svTick);
+            }
+            for (int i = 25; i <= 31; i ++)
+            {
+                svTick = entity.ServerSimulationTick();
+                entity.SamplePhysicsState();
+                Assert.AreEqual(i, svTick);
+            }
+            
         }
     }
 }
