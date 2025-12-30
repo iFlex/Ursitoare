@@ -3,6 +3,7 @@ using Mirror;
 using Prediction;
 using Prediction.data;
 using Prediction.Interpolation;
+using Prediction.policies.singleInstance;
 using Prediction.wrappers;
 using UnityEngine;
 
@@ -31,6 +32,9 @@ namespace DefaultNamespace
         private DebugResimChecker resimulationDecider = new DebugResimChecker();
         private void Awake()
         {
+            SimpleConfigurableResimulationDecider.LOG_RESIMULATIONS = true;
+            SimpleConfigurableResimulationDecider.LOG_ALL_CHECKS = false;
+            
             Instance = this;
             PlayerController.spawned.AddEventListener(OnSpawned);
             PlayerController.despawned.AddEventListener(OnDespawned);

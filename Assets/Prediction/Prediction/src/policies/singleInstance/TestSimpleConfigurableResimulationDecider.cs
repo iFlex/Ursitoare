@@ -44,7 +44,7 @@ namespace Prediction.policies.singleInstance
             this.maxAngularVeloMagDelta = maxAngularVeloMagDelta;
         }
 
-        public virtual PredictionDecision Check(uint tickId, uint entityId, PhysicsStateRecord local, PhysicsStateRecord server)
+        public virtual PredictionDecision Check(uint entityId, uint tickId, PhysicsStateRecord local, PhysicsStateRecord server)
         {
             if (distResimThreshold > 0)
             {

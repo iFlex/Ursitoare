@@ -4,6 +4,6 @@ namespace Prediction.policies.singleInstance
 {
     public interface SingleSnapshotInstanceResimChecker
     {
-        PredictionDecision Check(uint tickId, uint entityId, PhysicsStateRecord local, PhysicsStateRecord server);
+        PredictionDecision Check(uint entityId, uint tickId, PhysicsStateRecord local, PhysicsStateRecord server);
     }
 }

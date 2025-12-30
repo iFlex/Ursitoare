@@ -41,7 +41,7 @@ namespace Prediction.policies.singleInstance
             this.angVeloResimThreshold = angVeloResimThreshold;
         }
 
-        public virtual PredictionDecision Check(uint tickId, uint entityId, PhysicsStateRecord local, PhysicsStateRecord server)
+        public virtual PredictionDecision Check(uint entityId, uint tickId, PhysicsStateRecord local, PhysicsStateRecord server)
         {
             float distD = (local.position - server.position).magnitude;
             float angD = Quaternion.Angle(local.rotation, server.rotation);
