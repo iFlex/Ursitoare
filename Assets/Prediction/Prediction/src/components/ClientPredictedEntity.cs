@@ -322,9 +322,9 @@ namespace Prediction
 
         public static bool TRACK_RESIM_DISCREPANCIES = true;
         private Dictionary<uint, uint> tickResimCounter = new Dictionary<uint, uint>();
-        private PhysicsStateRecord prevResimState;
+        private PhysicsStateRecord prevResimState = new PhysicsStateRecord();
         private SimpleConfigurableResimulationDecider resimDesyncComparator = new SimpleConfigurableResimulationDecider(float.MinValue, float.MinValue, float.MinValue, float.MinValue);
-        private uint resimCounter;
+        private uint resimCounter = 0;
         
         public void PostResimulationStep(uint tickId)
         {
