@@ -229,7 +229,7 @@ namespace Prediction
             {
                 devt.reason = DesyncReason.GAP_IN_SERVER_STREAM;
                 devt.tickId = lastAppliedTick;
-                devt.gapSize = serverState.tickId - lastAppliedTick;
+                devt.gapSize = lastAppliedTick - serverState.tickId;
                 potentialDesync.Dispatch(devt);
             }
             
