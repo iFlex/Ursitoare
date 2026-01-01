@@ -192,12 +192,13 @@ namespace Prediction
         void LogState(uint tickId, bool isResim)
         {
             //TODO: we should maybe just offer hooks for the host application to use instead of direct logging here...
-            Debug.Log($"{(isResim ? "[RESIMULATION]" : "[SIMULATION]")}[DATA] i:{id} t:{tickId} v:{rigidbody.linearVelocity.magnitude} av:{rigidbody.angularVelocity.magnitude} pos:{rigidbody.position} rot:{rigidbody.rotation}");
+            PhysicsStateRecord serverState = serverStateBuffer.Get(tickId);
+            Debug.Log($"{(isResim ? "[RESIMULATION]" : "[SIMULATION]")}[DATA] i:{id} t:{tickId} v:{rigidbody.linearVelocity.magnitude} av:{rigidbody.angularVelocity.magnitude} pos:{rigidbody.position} rot:{rigidbody.rotation} SERVER(v:{(serverState == null ? "x" : serverState.velocity.magnitude)} av:{(serverState == null ? "x" : serverState.angularVelocity.magnitude)} pos:{(serverState == null ? "x" : serverState.position)} rot:{(serverState == null ? "x" : serverState.rotation)})");
         }
 
         public uint resimChecksSkippedDueToLackOfServerData = 0;
         public uint resimChecksSkippedDueToServerAheadOfClient = 0;
-        public static bool LOG_VELOCITIES = true;
+        public static bool LOG_VELOCITIES = false;
         public static bool LOG_VELOCITIES_ALL = false;
         public uint lastCheckedServerTickId = 0;
         
