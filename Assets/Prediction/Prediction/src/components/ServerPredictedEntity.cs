@@ -14,6 +14,7 @@ namespace Prediction
         public static int BUFFER_FULL_THRESHOLD = 3; //Number of ticks to buffer before starting to send out the updates
         public static bool CATCHUP = true;
         public static bool SERVER_LOG_VELOCITIES = false;
+        public static bool LOG_CLIENT_INUPTS = false;
         
         public GameObject gameObject;
         private PhysicsStateRecord serverStateBfr = new PhysicsStateRecord();
@@ -195,6 +196,7 @@ namespace Prediction
 
         public uint clUpdateCount = 0;
         public uint clAddedUpdateCount = 0;
+        private ClientInput cevt;
         public void BufferClientTick(uint clientTickId, PredictionInputRecord inputRecord)
         {
             if (DEBUG)
@@ -230,6 +232,13 @@ namespace Prediction
             if (!bufferFilled)
             {
                 bufferFilled = inputQueue.GetFill() >= BUFFER_FULL_THRESHOLD;
+            }
+
+            if (LOG_CLIENT_INUPTS)
+            {
+                cevt.tickId = tickId;
+                cevt.input = inputRecord;
+                inputReceived.Dispatch(cevt);   
             }
         }
         
@@ -333,9 +342,16 @@ namespace Prediction
             public uint tickId;
             public DesyncReason reason;
         }
+
+        public struct ClientInput
+        {
+            public uint tickId;
+            public PredictionInputRecord input;
+        }
         
         public SafeEventDispatcher<bool> firstTickArrived = new();
         public SafeEventDispatcher<DesyncEvent> potentialDesync = new();
         public SafeEventDispatcher<bool> stateSampled = new();
+        public SafeEventDispatcher<ClientInput> inputReceived = new();
     }
 }
