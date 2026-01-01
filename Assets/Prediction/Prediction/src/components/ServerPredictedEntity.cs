@@ -13,6 +13,7 @@ namespace Prediction
         public static bool USE_BUFFERING = true;
         public static int BUFFER_FULL_THRESHOLD = 3; //Number of ticks to buffer before starting to send out the updates
         public static bool CATCHUP = true;
+        public static bool SERVER_LOG_VELOCITIES = false;
         
         public GameObject gameObject;
         private PhysicsStateRecord serverStateBfr = new PhysicsStateRecord();
@@ -81,7 +82,8 @@ namespace Prediction
             {
                 inputsToApply--;
                 //NOTE: last applied input must not be removed as it will be when SamplePhysicsState runs...
-                PredictionInputRecord nextInput = TakeNextInput(inputsToApply > 0);
+                //TODO: get rid of the side effect
+                PredictionInputRecord nextInput = TakeNextInput_TickSideEffect(inputsToApply > 0);
                 if (DEBUG)
                     Debug.Log($"[ServerPredictedEntity][ServerSimulationTick] id:{id} goID:{gameObject.GetInstanceID()} lastAppliedTick:{lastAppliedTick} buffRange:{inputQueue.GetRange()} buffFill:{inputQueue.GetFill()} nextInput:{nextInput}");
                 
@@ -172,8 +174,16 @@ namespace Prediction
             PopulatePhysicsStateRecord(GetTickId(), serverStateBfr);
             serverStateBfr.input = inputQueue.Remove(GetTickId());
             UpdateBufferStateOnRemoval();
+            stateSampled.Dispatch(true);
+            
             if (DEBUG)
                 Debug.Log($"[ServerPredictedEntity][SamplePhysicsState]({id}) input:{serverStateBfr}");
+            
+            if (SERVER_LOG_VELOCITIES)
+            {
+                //TODO: this can be done via events in the host application...
+                Debug.Log($"[SIMULATION][DATA] i:{id} t:{tickId} v:{rigidbody.linearVelocity.magnitude} av:{rigidbody.angularVelocity.magnitude} pos:{rigidbody.position} rot:{rigidbody.rotation}");
+            }
             return serverStateBfr;
         }
 
@@ -235,7 +245,7 @@ namespace Prediction
             return tickId;
         }
 
-        public PredictionInputRecord TakeNextInput(bool remove)
+        public PredictionInputRecord TakeNextInput_TickSideEffect(bool remove)
         {
             if (!CanUseBuffer())
             {
@@ -326,5 +336,6 @@ namespace Prediction
         
         public SafeEventDispatcher<bool> firstTickArrived = new();
         public SafeEventDispatcher<DesyncEvent> potentialDesync = new();
+        public SafeEventDispatcher<bool> stateSampled = new();
     }
 }

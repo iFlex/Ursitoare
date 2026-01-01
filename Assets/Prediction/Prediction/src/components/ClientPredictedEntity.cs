@@ -182,6 +182,17 @@ namespace Prediction
             //NOTE: this samples the physics state of the predicted entity and stores it in the localStateBuffer as a side effect.
             PopulatePhysicsStateRecord(tickId, stateData);
             newStateReached.Dispatch(stateData);
+            
+            if (LOG_VELOCITIES_ALL || (LOG_VELOCITIES && isControlledLocally))
+            {
+                LogState(tickId, false);
+            }
+        }
+
+        void LogState(uint tickId, bool isResim)
+        {
+            //TODO: we should maybe just offer hooks for the host application to use instead of direct logging here...
+            Debug.Log($"{(isResim ? "[RESIMULATION]" : "[SIMULATION]")}[DATA] i:{id} t:{tickId} v:{rigidbody.linearVelocity.magnitude} av:{rigidbody.angularVelocity.magnitude} pos:{rigidbody.position} rot:{rigidbody.rotation}");
         }
 
         public uint resimChecksSkippedDueToLackOfServerData = 0;
@@ -217,12 +228,6 @@ namespace Prediction
                 //TODO: unit test?
                 resimChecksSkippedDueToServerAheadOfClient++;
                 return PredictionDecision.NOOP;
-            }
-
-            if (LOG_VELOCITIES_ALL || (LOG_VELOCITIES && isControlledLocally))
-            {
-                //TODO: we should maybe just offer hooks for the host application to use instead of direct logging here...
-                Debug.Log($"[PREDICTION][DATA] i:{id} t:{lastAppliedTick} v:{rigidbody.linearVelocity.magnitude} av:{rigidbody.angularVelocity.magnitude}");
             }
 
             if (serverState.tickId > lastCheckedServerTickId && (serverState.tickId - lastCheckedServerTickId) > 1)
@@ -322,7 +327,8 @@ namespace Prediction
         {
             resimTicks++;
             resimTicksAsFollower++;
-            //TODO: do we need anything here?
+            resimulationStep.Dispatch(true);
+            //TODO: do we need anything here? apply input from server?
         }
 
         public static bool TRACK_RESIM_DISCREPANCIES = true;
@@ -350,6 +356,11 @@ namespace Prediction
             {
                 resimDesyncComparator.Check(0, tickId, prevResimState, record);
                 //TODO: manually log here instead o relying on the logging to be on
+            }
+
+            if (LOG_VELOCITIES_ALL || (LOG_VELOCITIES && isControlledLocally))
+            {
+                LogState(tickId, true);
             }
         }
 
