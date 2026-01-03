@@ -90,6 +90,10 @@ namespace Prediction
                 
                 if (nextInput != null)
                 {
+                    if (LOG_CLIENT_INUPTS)
+                    {
+                        Debug.Log($"[SV][SIMULATION][INPUT] i:{id} t:{tickId} input:{nextInput}");
+                    }
                     int delta = (int)(tickId > lastAppliedTick ? tickId - lastAppliedTick : lastAppliedTick - tickId);
                     lastAppliedTick = tickId;
                     if (delta > 1)
@@ -172,6 +176,7 @@ namespace Prediction
         
         public PhysicsStateRecord SamplePhysicsState()
         {
+            preSampleState.Dispatch(true);
             PopulatePhysicsStateRecord(GetTickId(), serverStateBfr);
             serverStateBfr.input = inputQueue.Remove(GetTickId());
             UpdateBufferStateOnRemoval();
@@ -183,7 +188,7 @@ namespace Prediction
             if (SERVER_LOG_VELOCITIES)
             {
                 //TODO: this can be done via events in the host application...
-                Debug.Log($"[SIMULATION][DATA] i:{id} t:{tickId} v:{rigidbody.linearVelocity.magnitude} av:{rigidbody.angularVelocity.magnitude} pos:{rigidbody.position} rot:{rigidbody.rotation}");
+                Debug.Log($"[SV][SIMULATION][DATA] i:{id} t:{tickId} p:{rigidbody.position.ToString("F10")} r:{rigidbody.rotation.ToString("F10")} v:{rigidbody.linearVelocity.ToString("F10")} a:{rigidbody.angularVelocity.ToString("F10")}");
             }
             return serverStateBfr;
         }
@@ -349,6 +354,7 @@ namespace Prediction
             public PredictionInputRecord input;
         }
         
+        public SafeEventDispatcher<bool> preSampleState = new();
         public SafeEventDispatcher<bool> firstTickArrived = new();
         public SafeEventDispatcher<DesyncEvent> potentialDesync = new();
         public SafeEventDispatcher<bool> stateSampled = new();

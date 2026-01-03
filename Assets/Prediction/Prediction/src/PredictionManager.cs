@@ -17,6 +17,10 @@ namespace Prediction
         public static bool DO_RESIM = true;
         public static bool DO_SNAP = true;
         
+        //TODO: unit test
+        public static bool IGNORE_NON_AUTH_RESIM_DECISIONS = false;
+        public static bool LOG_PRE_SIM_STATE = false;
+        
         //TODO: guard singleton
         public static PredictionManager Instance;
         //TODO: validate presence of all static providers
@@ -451,6 +455,12 @@ namespace Prediction
             {
                 PredictionDecision decision =
                     pair.Value.GetPredictionDecision(tickId, out uint localFromTick);
+                if (IGNORE_NON_AUTH_RESIM_DECISIONS && pair.Key != localEntityId)
+                {
+                    localFromTick = resimFromTickId;
+                    decision = PredictionDecision.NOOP;
+                }
+                
                 int crnt = PredictionDecisionToInt(decision);
                 if (crnt > decisionCode)
                 {
@@ -645,6 +655,11 @@ namespace Prediction
                         //Only run this on the pure client yo... 
                         pair.Value.ClientFollowerSimulationTick(tickId);
                     }
+
+                    if (LOG_PRE_SIM_STATE)
+                    {
+                        Debug.Log($"[CL][PRESIMULATION][DATA] i:{pair.Key} t:{tickId} p:{pair.Value.rigidbody.position.ToString("F10")} r:{pair.Value.rigidbody.rotation.ToString("F10")}");
+                    }
                 }
 
                 if (localEntity == null)
@@ -739,6 +754,11 @@ namespace Prediction
             
             int connId = _entityToOwnerConnId[entity];
             _connIdToLatestTick[connId] = tid;
+            
+            if (LOG_PRE_SIM_STATE)
+            {
+                Debug.Log($"[CL][PRESIMULATION][DATA] i:{entity.id} t:{tickId} p:{entity.rigidbody.position.ToString("F10")} r:{entity.rigidbody.rotation.ToString("F10")}");
+            }
         }
         
         //FODO: performance

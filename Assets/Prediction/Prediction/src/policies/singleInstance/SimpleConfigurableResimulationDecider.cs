@@ -131,11 +131,11 @@ namespace Prediction.policies.singleInstance
         {
             if (isResim)
             {
-                Debug.Log($"[CHECK][RESIMULATION] i:{entityId}|t:{tickId}|D:{distD}|R:{angD}|V:{vdelta}|AV:{avdelta}|");
+                Debug.Log($"[CHECK][RESIMULATION] i:{entityId}|t:{tickId}|D:{distD.ToString("F10")}|R:{angD.ToString("F10")}|V:{vdelta.ToString("F10")}|AV:{avdelta.ToString("F10")}|");
             }
             else
             {
-                Debug.Log($"[CHECK]______________ i:{entityId}|t:{tickId}|D:{distD}|R:{angD}|V:{vdelta}|AV:{avdelta}|");
+                Debug.Log($"[CHECK]______________ i:{entityId}|t:{tickId}|D:{distD.ToString("F10")}|R:{angD.ToString("F10")}|V:{vdelta.ToString("F10")}|AV:{avdelta.ToString("F10")}|");
             }
         }
     }

@@ -13,6 +13,7 @@ namespace Prediction
     {
         public static bool DEBUG = false;
         public static bool LOG_USED_INPUTS = false;
+        public static bool TRUST_ALREADY_RESIMULATED_TICKS = false;
         
         //STATE TRACKING
         public GameObject gameObject;
@@ -42,7 +43,7 @@ namespace Prediction
         
         //This is used exclusively in follower mode (predicted entity not controlled by user).
         public bool isControlledLocally { get; private set; }
-        
+        private uint resimTicksOverbudget = 0;
         //STATS
         public uint lastTick = 0;
         public uint totalTicks = 0;
@@ -113,6 +114,10 @@ namespace Prediction
             {
                 maxServerDelay = serverDelay;
             }
+            if (resimTicksOverbudget > 0)
+            {
+                resimTicksOverbudget--;
+            }
             return inputRecord;
         }
 
@@ -162,7 +167,7 @@ namespace Prediction
             SampleInput(inputData);
             if (LOG_USED_INPUTS)
             {
-                Debug.Log($"[SIMULATION][INPUT] i:{id} t:{tickId} input:{inputData}");
+                Debug.Log($"[CL][SIMULATION][INPUT] i:{id} t:{tickId} input:{inputData}");
             }
             return inputData;
         }
@@ -183,6 +188,7 @@ namespace Prediction
         
         public void SamplePhysicsState(uint tickId)
         {
+            preSampleState.Dispatch(true);
             //TODO: correctly convert tick to index!
             PhysicsStateRecord stateData = localStateBuffer.Get((int)tickId);
             //NOTE: this samples the physics state of the predicted entity and stores it in the localStateBuffer as a side effect.
@@ -199,7 +205,7 @@ namespace Prediction
         {
             //TODO: we should maybe just offer hooks for the host application to use instead of direct logging here...
             PhysicsStateRecord serverState = serverStateBuffer.Get(tickId);
-            Debug.Log($"{(isResim ? "[RESIMULATION]" : "[SIMULATION]")}[DATA] i:{id} t:{tickId} v:{rigidbody.linearVelocity.magnitude} av:{rigidbody.angularVelocity.magnitude} pos:{rigidbody.position} rot:{rigidbody.rotation} SERVER(v:{(serverState == null ? "x" : serverState.velocity.magnitude)} av:{(serverState == null ? "x" : serverState.angularVelocity.magnitude)} pos:{(serverState == null ? "x" : serverState.position)} rot:{(serverState == null ? "x" : serverState.rotation)})");
+            Debug.Log($"{(isResim ? "[RESIMULATION]" : "[CL][SIMULATION]")}[DATA] i:{id} t:{tickId} v:{rigidbody.linearVelocity.magnitude} av:{rigidbody.angularVelocity.magnitude} (p:{rigidbody.position.ToString("F10")} r:{rigidbody.rotation.ToString("F10")} v:{rigidbody.linearVelocity.ToString("F10")} a:{rigidbody.angularVelocity.ToString("F10")}) SERVER(p:{(serverState == null ? "x" : serverState.position.ToString("F10"))} r:{(serverState == null ? "x" : serverState.rotation.ToString("F10"))} v:{(serverState == null ? "x" : serverState.velocity.ToString("F10"))} a:{(serverState == null ? "x" : serverState.angularVelocity.ToString("F10"))})");
         }
 
         public uint resimChecksSkippedDueToLackOfServerData = 0;
@@ -236,7 +242,17 @@ namespace Prediction
                 resimChecksSkippedDueToServerAheadOfClient++;
                 return PredictionDecision.NOOP;
             }
-
+            
+            lastCheckedServerTickId = serverState.tickId;
+            fromTick = serverState.tickId;
+            if (TRUST_ALREADY_RESIMULATED_TICKS && tickResimCounter.GetValueOrDefault(fromTick, 0u) > 1)
+            //if (TRUST_ALREADY_RESIMULATED_TICKS && resimTicksOverbudget > 0)
+            {
+                //TODO: toggle this log
+                Debug.Log($"[RESIMULATION][SKIP_CHECK] i:{id} t:{lastAppliedTick} st:{serverState.tickId}");
+                return PredictionDecision.NOOP;
+            }
+            
             if (serverState.tickId > lastCheckedServerTickId && (serverState.tickId - lastCheckedServerTickId) > 1)
             {
                 devt.reason = DesyncReason.GAP_IN_SERVER_STREAM;
@@ -244,9 +260,6 @@ namespace Prediction
                 devt.gapSize = serverState.tickId - lastCheckedServerTickId;
                 potentialDesync.Dispatch(devt);
             }
-            
-            lastCheckedServerTickId = serverState.tickId;
-            fromTick = serverState.tickId;
             return resimulationEligibilityCheckHook(id, serverState.tickId, localStateBuffer, serverStateBuffer);
         }
 
@@ -332,6 +345,7 @@ namespace Prediction
             ApplyForces();
             resimTicks++;
             resimTicksAsAuthority++;
+            resimTicksOverbudget++;
         }
         
         void PreResimulationFollowerStep(uint tickId)
@@ -351,13 +365,14 @@ namespace Prediction
         public void PostResimulationStep(uint tickId)
         {
             //TODO: check conversion to int
+            preSampleState.Dispatch(true);
             PhysicsStateRecord record = localStateBuffer.Get((int) tickId);
-            
+            resimCounter = tickResimCounter.GetValueOrDefault(tickId, 0u) + 1;
+            tickResimCounter[tickId] = resimCounter;
+
             if (isControlledLocally && TRACK_RESIM_DISCREPANCIES)
             {
-                resimCounter = tickResimCounter.GetValueOrDefault(tickId, 0u) + 1;
                 prevResimState.From(record);
-                tickResimCounter[tickId] = resimCounter;
             }
             
             PopulatePhysicsStateRecord(tickId, record);
@@ -409,6 +424,7 @@ namespace Prediction
             public uint gapSize;
         }
         
+        public SafeEventDispatcher<bool> preSampleState = new();
         public SafeEventDispatcher<bool> onReset = new();
         public SafeEventDispatcher<PhysicsStateRecord> newStateReached = new();
         public SafeEventDispatcher<bool> resimulation = new();
