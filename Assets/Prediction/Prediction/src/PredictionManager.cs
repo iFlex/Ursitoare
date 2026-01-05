@@ -446,7 +446,7 @@ namespace Prediction
         bool ShouldIgnoreResimulationDecision(ClientPredictedEntity entity)
         {
             return (IGNORE_NON_AUTH_RESIM_DECISIONS && entity.id != localEntityId) ||
-                   (IGNORE_CONTROLLABLE_FOLLOWER_DECISIONS && entity.IsControllable());
+                   (IGNORE_CONTROLLABLE_FOLLOWER_DECISIONS && entity.IsControllable() && entity.id != localEntityId);
         }
         
         //TODO: package private
