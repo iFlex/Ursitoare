@@ -25,7 +25,8 @@ public class PlayerRocketController : PlayerController
     public override void ApplyForces()
     {
         rb.AddForce(mass * gAcceleration * Vector3.up);
-        rb.AddForce(throttle * fwdPower * (isBoosting ? boostPowerMultiplier : 1) * rb.transform.forward);
+        Vector3 worldFwd = rb.rotation * Vector3.forward;
+        rb.AddForce(throttle * fwdPower * (isBoosting ? boostPowerMultiplier : 1) * worldFwd);
         rb.AddRelativeTorque(pitch * pitchPower * Vector3.left);
         rb.AddRelativeTorque(yaw * yawPower * Vector3.up);
         rb.AddRelativeTorque(roll * rollPower * Vector3.forward);

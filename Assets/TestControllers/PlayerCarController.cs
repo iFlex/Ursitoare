@@ -14,7 +14,8 @@ public class PlayerCarController : PlayerController
     public override void ApplyForces()
     {
         Vector3 torque = steer * steerPowerMagnitude * Vector3.up;
-        rb.AddForce(throttle * powerMagnitude * (isBoosting ? boostPowerMultiplier : 1) * rb.transform.forward);
+        Vector3 worldFwd = rb.rotation * Vector3.forward;
+        rb.AddForce(throttle * powerMagnitude * (isBoosting ? boostPowerMultiplier : 1) * worldFwd);
         rb.AddTorque(torque);
     }
 
