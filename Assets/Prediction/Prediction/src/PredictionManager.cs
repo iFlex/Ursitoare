@@ -21,6 +21,7 @@ namespace Prediction
         public static bool IGNORE_NON_AUTH_RESIM_DECISIONS = false;
         public static bool IGNORE_CONTROLLABLE_FOLLOWER_DECISIONS = true;
         public static bool LOG_PRE_SIM_STATE = false;
+        public static bool PREDICTION_ENABLED = true;
         
         //TODO: guard singleton
         public static PredictionManager Instance;
@@ -640,7 +641,10 @@ namespace Prediction
             if (isClient)
             {
                 //Uses latest update for each follower
-                ClientResimulationCheckPass();
+                if (PREDICTION_ENABLED)
+                {
+                    ClientResimulationCheckPass();
+                }
                 foreach (KeyValuePair<uint, ClientPredictedEntity> pair in _clientEntities)
                 {
                     if (pair.Key == localEntityId)
@@ -648,7 +652,16 @@ namespace Prediction
                         if (DEBUG)
                             Debug.Log($"[PredictionManager][ClientPreSimTick] Client:{pair.Value} tick:{tickId}");
                         
-                        PredictionInputRecord tickInputRecord = pair.Value.ClientSimulationTick(tickId);
+                        PredictionInputRecord tickInputRecord;
+                        if (PREDICTION_ENABLED || isServer)
+                        {
+                           tickInputRecord = pair.Value.ClientSimulationTick(tickId);
+                        }
+                        else
+                        {
+                            tickInputRecord = pair.Value.SampleInput(tickId);
+                        }
+                        
                         if (!isServer)
                         {
                             try
@@ -669,7 +682,7 @@ namespace Prediction
                     }
                     else if (!isServer)
                     {
-                        //Only run this on the pure client yo... 
+                        //Only run this on the pure client
                         pair.Value.ClientFollowerSimulationTick(tickId);
                     }
 

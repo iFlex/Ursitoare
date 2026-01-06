@@ -190,7 +190,7 @@ namespace Prediction
             totalTicks++;
         }
 
-        PredictionInputRecord SampleInput(uint tickId)
+        public PredictionInputRecord SampleInput(uint tickId)
         {
             //TODO: correctly convert tick to index!
             PredictionInputRecord inputData = localInputBuffer.Get((int)tickId);
