@@ -1,4 +1,4 @@
-using Assets.Scripts.Systems.Events;
+using Sector0.Events;
 using DefaultNamespace;
 using Mirror;
 using Prediction;

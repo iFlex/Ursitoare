@@ -237,6 +237,12 @@
       },
       "url": "https://packages.unity.com"
     },
+    "sector0.safe-event-dispatcher": {
+      "version": "file:G:/gamedev/SafeEventDispatcher",
+      "depth": 0,
+      "source": "local",
+      "dependencies": {}
+    },
     "com.unity.modules.accessibility": {
       "version": "1.0.0",
       "depth": 0,
