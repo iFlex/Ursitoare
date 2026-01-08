@@ -53,7 +53,7 @@ namespace Prediction.Interpolation
         }
 
         private uint pervTick = 0;
-        public void Update(float deltaTime)
+        public void Update(float deltaTime, uint tickId)
         {
             if (!CanStartInterpolation())
                 return;
