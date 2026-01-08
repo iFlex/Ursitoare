@@ -235,8 +235,12 @@ namespace Prediction
             PhysicsStateRecord stateData = localStateBuffer.Get((int)tickId);
             //NOTE: this samples the physics state of the predicted entity and stores it in the localStateBuffer as a side effect.
             PopulatePhysicsStateRecord(tickId, stateData);
+
             newStateReached.Dispatch(stateData);
-            
+            if (!isCurrentStateSpeculative) {
+                newAuthoritativeStateReached.Dispatch(stateData);
+            }
+
             if (LOG_VELOCITIES_ALL || (LOG_VELOCITIES && isControlledLocally))
             {
                 LogState(tickId, false);
@@ -473,9 +477,11 @@ namespace Prediction
             public uint gapSize;
         }
         
+        public SafeEventDispatcher<PhysicsStateRecord> newStateReached = new();
+        public SafeEventDispatcher<PhysicsStateRecord> newAuthoritativeStateReached = new();
+
         public SafeEventDispatcher<bool> preSampleState = new();
         public SafeEventDispatcher<bool> onReset = new();
-        public SafeEventDispatcher<PhysicsStateRecord> newStateReached = new();
         public SafeEventDispatcher<bool> resimulation = new();
         public SafeEventDispatcher<bool> resimulationStep = new();
         
