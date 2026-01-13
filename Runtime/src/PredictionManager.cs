@@ -405,23 +405,23 @@ namespace Prediction
                 return;
             
             resimulatedThisTick = false;
-            preSimDuration = Time.realtimeSinceStart;
+            preSimDuration = Time.realtimeSinceStartup;
             tickDuration = preSimDuration;
 
             ClientPreSimTick();
             ServerPreSimTick();
-            preSimDuration = Time.realtimeSinceStart - preSimDuration;
+            preSimDuration = Time.realtimeSinceStartup - preSimDuration;
 
             PHYSICS_CONTROLLER.Simulate();
 
-            postSimDuration = Time.realtimeSinceStart;
+            postSimDuration = Time.realtimeSinceStartup;
             ClientPostSimTick();
             ServerPostSimTick();
-            postSimDuration = Time.realtimeSinceStart - postSimDuration;
-            tickDuration = Time.realtimeSinceStart - tickDuration;
+            postSimDuration = Time.realtimeSinceStartup - postSimDuration;
+            tickDuration = Time.realtimeSinceStartup - tickDuration;
 
             if (DEBUG) {
-                Debug.Log($"[PredictionManager][Tick] td:{tickDuration} pre:{preSimDuration} post:{postSimDuration} sim:{tickDuration - preSimDuration - postSimDuration}");
+                Debug.Log($"[PredictionManager][Tick] td:{tickDuration} pre:{preSimDuration} post:{postSimDuration} sim:{tickDuration - preSimDuration - postSimDuration} resim:{(resimulatedThisTick ? "1" : "0")}");
             }
             tickId++;
         }
