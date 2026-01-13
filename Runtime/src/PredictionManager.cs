@@ -391,6 +391,11 @@ namespace Prediction
         {
             return localEntity;
         }
+        
+        bool resimulatedThisTick = false;
+        float tickDuration = 0;
+        float preSimDuration = 0;
+        float postSimDuration = 0;
 
         private PhysicsStateRecord specialHostRecord = new PhysicsStateRecord();
         //TODO: package private
@@ -399,11 +404,25 @@ namespace Prediction
             if (!setup) 
                 return;
             
+            resimulatedThisTick = false;
+            preSimDuration = Time.realtimeSinceStart;
+            tickDuration = preSimDuration;
+
             ClientPreSimTick();
             ServerPreSimTick();
+            preSimDuration = Time.realtimeSinceStart - preSimDuration;
+
             PHYSICS_CONTROLLER.Simulate();
+
+            postSimDuration = Time.realtimeSinceStart;
             ClientPostSimTick();
             ServerPostSimTick();
+            postSimDuration = Time.realtimeSinceStart - postSimDuration;
+            tickDuration = Time.realtimeSinceStart - tickDuration;
+
+            if (DEBUG) {
+                Debug.Log($"[PredictionManager][Tick] td:{tickDuration} pre:{preSimDuration} post:{postSimDuration} sim:{tickDuration - preSimDuration - postSimDuration}");
+            }
             tickId++;
         }
 
@@ -550,7 +569,7 @@ namespace Prediction
                 resimSkipNotEnoughHistory++;
                 return;
             }
-
+ 
             resimulating = true;
             uint rewind = tickId - startTick;
             if (!PHYSICS_CONTROLLER.Rewind(rewind))
@@ -559,7 +578,8 @@ namespace Prediction
                 resimulating = false;
                 return;
             }
-            
+
+            resimulatedThisTick = true;
             //TODO: decide what to do with these hooks...
             PHYSICS_CONTROLLER.BeforeResimulate(null);
             if (maxRewindDistance < rewind)
