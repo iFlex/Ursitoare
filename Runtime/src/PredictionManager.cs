@@ -394,9 +394,9 @@ namespace Prediction
         }
         
         bool resimulatedThisTick = false;
-        float tickDuration = 0;
-        float preSimDuration = 0;
-        float postSimDuration = 0;
+        long tickDuration = 0;
+        long preSimDuration = 0;
+        long postSimDuration = 0;
 
         private PhysicsStateRecord specialHostRecord = new PhysicsStateRecord();
         //TODO: package private
@@ -406,20 +406,20 @@ namespace Prediction
                 return;
             
             resimulatedThisTick = false;
-            preSimDuration = Time.realtimeSinceStartup;
+            preSimDuration = System.Diagnostics.Stopwatch.GetTimestamp();
             tickDuration = preSimDuration;
 
             ClientPreSimTick();
             ServerPreSimTick();
-            preSimDuration = Time.realtimeSinceStartup - preSimDuration;
+            preSimDuration = System.Diagnostics.Stopwatch.GetTimestamp() - preSimDuration;
 
             PHYSICS_CONTROLLER.Simulate();
 
-            postSimDuration = Time.realtimeSinceStartup;
+            postSimDuration = System.Diagnostics.Stopwatch.GetTimestamp();
             ClientPostSimTick();
             ServerPostSimTick();
-            postSimDuration = Time.realtimeSinceStartup - postSimDuration;
-            tickDuration = Time.realtimeSinceStartup - tickDuration;
+            postSimDuration = System.Diagnostics.Stopwatch.GetTimestamp() - postSimDuration;
+            tickDuration = System.Diagnostics.Stopwatch.GetTimestamp() - tickDuration;
 
             if (LOG_TIMING || DEBUG) {
                 Debug.Log($"[PredictionManager][Tick] t:{tickId} td:{tickDuration} pre:{preSimDuration} post:{postSimDuration} sim:{tickDuration - preSimDuration - postSimDuration} resim:{(resimulatedThisTick ? "1" : "0")}");
