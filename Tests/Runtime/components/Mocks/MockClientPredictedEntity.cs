@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿#if UNITY_EDITOR
+using UnityEngine;
 
 namespace Prediction.Tests.Mocks
 {
@@ -24,3 +25,4 @@ namespace Prediction.Tests.Mocks
         }
     }
 }
+#endif

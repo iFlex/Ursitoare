@@ -14,6 +14,7 @@ namespace Prediction
     public class PredictionManager
     {
         public static bool DEBUG = false;
+        public static bool LOG_TIMING = false;
         public static bool DO_RESIM = true;
         public static bool DO_SNAP = true;
         
@@ -420,7 +421,7 @@ namespace Prediction
             postSimDuration = Time.realtimeSinceStartup - postSimDuration;
             tickDuration = Time.realtimeSinceStartup - tickDuration;
 
-            if (DEBUG) {
+            if (LOG_TIMING || DEBUG) {
                 Debug.Log($"[PredictionManager][Tick] td:{tickDuration} pre:{preSimDuration} post:{postSimDuration} sim:{tickDuration - preSimDuration - postSimDuration} resim:{(resimulatedThisTick ? "1" : "0")}");
             }
             tickId++;
