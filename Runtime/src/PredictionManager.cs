@@ -422,7 +422,7 @@ namespace Prediction
             tickDuration = Time.realtimeSinceStartup - tickDuration;
 
             if (LOG_TIMING || DEBUG) {
-                Debug.Log($"[PredictionManager][Tick] td:{tickDuration} pre:{preSimDuration} post:{postSimDuration} sim:{tickDuration - preSimDuration - postSimDuration} resim:{(resimulatedThisTick ? "1" : "0")}");
+                Debug.Log($"[PredictionManager][Tick] t:{tickId} td:{tickDuration} pre:{preSimDuration} post:{postSimDuration} sim:{tickDuration - preSimDuration - postSimDuration} resim:{(resimulatedThisTick ? "1" : "0")}");
             }
             tickId++;
         }
