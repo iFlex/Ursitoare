@@ -394,6 +394,8 @@ namespace Prediction
         }
         
         bool resimulatedThisTick = false;
+		long lastTickTimestamp = 0;
+		long interTickDuration = 0;
         long tickDuration = 0;
         long preSimDuration = 0;
         long postSimDuration = 0;
@@ -405,7 +407,12 @@ namespace Prediction
             if (!setup) 
                 return;
             
+            ticksSinceResim++;
             resimulatedThisTick = false;
+            shouldResimThisTick = false;
+            interTickDuration = System.Diagnostics.Stopwatch.GetTimestamp() - lastTickTimestamp;
+			lastTickTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
+
             preSimDuration = System.Diagnostics.Stopwatch.GetTimestamp();
             tickDuration = preSimDuration;
 
@@ -422,7 +429,7 @@ namespace Prediction
             tickDuration = System.Diagnostics.Stopwatch.GetTimestamp() - tickDuration;
 
             if (LOG_TIMING || DEBUG) {
-                Debug.Log($"[PredictionManager][Tick] t:{tickId} td:{tickDuration} pre:{preSimDuration} post:{postSimDuration} sim:{tickDuration - preSimDuration - postSimDuration} resim:{(resimulatedThisTick ? "1" : "0")}");
+                Debug.Log($"[PredictionManager][Tick] t:{tickId} deltaPrevTick:{interTickDuration} td:{tickDuration} pre:{preSimDuration} post:{postSimDuration} sim:{(tickDuration - preSimDuration - postSimDuration)} resim:{(resimulatedThisTick ? "1" : "0")} freq:{System.Diagnostics.Stopwatch.Frequency} shouldResim:{(shouldResimThisTick ? "1" : "0")}");
             }
             tickId++;
         }
@@ -527,6 +534,10 @@ namespace Prediction
             if (isClient && !isServer)
             {
                 PredictionDecision decision = ComputePredictionDecision(out uint fromTick);
+                if (decision == PredictionDecision.RESIMULATE)
+                {
+                    shouldResimThisTick = true;
+                }
                 
                 //OVERSIMULATION PROTECTION
                 if (decision == PredictionDecision.RESIMULATE && !CanResiumlate(fromTick))
@@ -580,6 +591,7 @@ namespace Prediction
                 return;
             }
 
+            ticksSinceResim = 0;
             resimulatedThisTick = true;
             //TODO: decide what to do with these hooks...
             PHYSICS_CONTROLLER.BeforeResimulate(null);
@@ -656,6 +668,7 @@ namespace Prediction
             } 
         }
 
+        public bool shouldResimThisTick = false;
         public uint clientSendErrors = 0;
         void ClientPreSimTick()
         {
@@ -954,10 +967,16 @@ namespace Prediction
             public uint entityId;
             public uint tickId;
         }
+
+        private uint ticksSinceResim = 0;
+        public bool oversimProtectWithTickInterval = true;
+        public uint minTicksBetweenResims = 0;
         
         bool CanResiumlate(uint tid)
         {
-            return !protectFromOversimulation || tickResimCounter.GetValueOrDefault(tid, 0u) < maxTickResimulationCount;
+            return !protectFromOversimulation || (
+                ( oversimProtectWithTickInterval && ticksSinceResim >= minTicksBetweenResims) || 
+                (!oversimProtectWithTickInterval && tickResimCounter.GetValueOrDefault(tid, 0u) < maxTickResimulationCount));
         }
         
         public uint GetTotalTicks()
