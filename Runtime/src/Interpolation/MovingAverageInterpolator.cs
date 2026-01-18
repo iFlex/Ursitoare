@@ -151,32 +151,19 @@ namespace Prediction.Interpolation
             buffer.Add(record);
             averagedBuffer.Add(GetNextProcessedState());
         }
-        
-        private Vector4 _rotationAvgAccumulator = Vector4.zero;
+
+        QuaternionAverage _quatAverager = new QuaternionAverage();
         void AddToWindow(PhysicsStateRecord accumulator, PhysicsStateRecord newItem)
         {
-            accumulator.position += newItem.position;
-            accumulator.velocity += newItem.velocity;
-            accumulator.angularVelocity += newItem.angularVelocity;
-            _rotationAvgAccumulator += new Vector4(newItem.rotation.x, newItem.rotation.y, newItem.rotation.z, newItem.rotation.w);
+            accumulator.position += newItem.position
+            _quatAverager.AccumulateRot(newItem.rotation);
         }
 
         void FinalizeWindow(PhysicsStateRecord accumulator, int count)
         {
             accumulator.position /= count;
-            accumulator.velocity /= count;
-            accumulator.angularVelocity /= count;
-            accumulator.rotation = NormalizeQuaternion(_rotationAvgAccumulator / count);
-            _rotationAvgAccumulator = Vector4.zero;
-        }
-        
-        private Quaternion NormalizeQuaternion(Vector4 v)
-        {
-            float lengthSq = v.x * v.x + v.y * v.y + v.z * v.z + v.w * v.w;
-            if (lengthSq < Mathf.Epsilon) return Quaternion.identity;
-        
-            float length = Mathf.Sqrt(lengthSq);
-            return new Quaternion(v.x / length, v.y / length, v.z / length, v.w / length);
+            accumulator.rotation = quaternionAverage.GetAverageRotation(count);
+            quaternionAverage.Reset();
         }
         
         PhysicsStateRecord GetNextProcessedState()
