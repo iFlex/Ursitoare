@@ -12,13 +12,16 @@ namespace Prediction
     public class ClientPredictedEntity : AbstractPredictedEntity
     {
         public static bool DEBUG = false;
+        public static bool LOG_ADDED_SERVER_STATES = true;
         public static bool LOG_USED_INPUTS = false;
         public static bool TRUST_ALREADY_RESIMULATED_TICKS = false;
         public static bool APPLY_SERVER_INPUT_TO_FOLLOWERS = true;
         public static bool LOG_VELOCITIES = false;
         public static bool LOG_VELOCITIES_ALL = false;
         public static bool TRACK_RESIM_DISCREPANCIES = true;
-        
+        public static bool ALLOW_SERVER_HISTORY_REWRITES = false;
+        public static bool LOG_RESIMULATION_STEPS = true;
+
         //STATE TRACKING
         public GameObject gameObject;
         // entityId, tickId, localHist, serverHist
@@ -56,6 +59,8 @@ namespace Prediction
         public uint lastTick = 0;
         private Dictionary<uint, uint> tickResimCounter = new Dictionary<uint, uint>();
         private bool isCurrentStateSpeculative = false;
+        private PhysicsStateRecord prevResimState;
+        private SimpleConfigurableResimulationDecider resimDesyncComparator = new SimpleConfigurableResimulationDecider(float.MinValue, float.MinValue, float.MinValue, float.MinValue);
         
         //STATS //TODO: reset?
         public uint totalTicks = 0;
@@ -97,8 +102,9 @@ namespace Prediction
             for (int i = 0; i < bufferSize; i++)
             {
                 localInputBuffer.Add(new PredictionInputRecord(totalFloatInputs, totalBinaryInputs));
-                localStateBuffer.Add(new PhysicsStateRecord());
+                localStateBuffer.Add(PhysicsStateRecord.AllocWithComponentState(totalStateFloats, totalStateBools));
             }
+            prevResimState = PhysicsStateRecord.AllocWithComponentState(totalStateFloats, totalStateBools);
         }
         
         public void SetCustomEligibilityCheckHandler(Func<uint, uint, RingBuffer<PhysicsStateRecord>, TickIndexedBuffer<PhysicsStateRecord>, PredictionDecision> handler)
@@ -235,7 +241,8 @@ namespace Prediction
             PhysicsStateRecord stateData = localStateBuffer.Get((int)tickId);
             //NOTE: this samples the physics state of the predicted entity and stores it in the localStateBuffer as a side effect.
             PopulatePhysicsStateRecord(tickId, stateData);
-
+            SampleComponentState(stateData);
+            
             newStateReached.Dispatch(stateData);
             if (!isCurrentStateSpeculative) {
                 newAuthoritativeStateReached.Dispatch(stateData);
@@ -309,15 +316,18 @@ namespace Prediction
         
         bool AddServerState(uint lastAppliedTick, PhysicsStateRecord serverRecord)
         {
-            if (DEBUG)
-                Debug.Log($"[ClientPreditedEntity][AddServerState]({id}) data:{serverRecord}");
-            
             //TODO: use lastAppliedTick to determine how old the update is and do stuff about it
             if (serverRecord.tickId < serverStateBuffer.GetEndTick())
             {
                 oldServerTickCount++;
             }
-            serverStateBuffer.Add(serverRecord.tickId, serverRecord);
+
+            if (ALLOW_SERVER_HISTORY_REWRITES || !serverStateBuffer.Contains(serverRecord.tickId))
+            {
+                serverStateBuffer.Add(serverRecord.tickId, serverRecord); 
+				if (DEBUG || LOG_ADDED_SERVER_STATES)
+                	Debug.Log($"[ClientPreditedEntity][AddServerState] i:{id} t:{lastAppliedTick} data:{serverRecord}");
+            }
             lastSvTickId = serverStateBuffer.GetEndTick();
             return serverRecord.tickId == serverStateBuffer.GetEndTick();
         }
@@ -368,6 +378,7 @@ namespace Prediction
         void SnapTo(PhysicsStateRecord serverState)
         {
             serverState.To(rigidbody);
+            LoadComponentState(serverState);
         }
 
         public void PreResimulationStep(uint tickId)
@@ -406,8 +417,6 @@ namespace Prediction
             //TODO: do we need anything here? apply input from server?
         }
         
-        private PhysicsStateRecord prevResimState = new PhysicsStateRecord();
-        private SimpleConfigurableResimulationDecider resimDesyncComparator = new SimpleConfigurableResimulationDecider(float.MinValue, float.MinValue, float.MinValue, float.MinValue);
         public void PostResimulationStep(uint tickId)
         {
             //TODO: check conversion to int
@@ -430,7 +439,7 @@ namespace Prediction
                 //TODO: manually log here instead o relying on the logging to be on
             }
 
-            if (LOG_VELOCITIES_ALL || (LOG_VELOCITIES && isControlledLocally))
+            if (LOG_RESIMULATION_STEPS || LOG_VELOCITIES_ALL || (LOG_VELOCITIES && isControlledLocally))
             {
                 LogState(tickId, true);
             }

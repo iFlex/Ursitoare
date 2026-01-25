@@ -65,6 +65,18 @@
             binaryInput[binaryFillIndex++] = binary;
         }
 
+        public void From(PredictionInputRecord other)
+        {
+            for (int i = 0; i < other.scalarInput.Length && i < scalarInput.Length; ++i)
+            {
+                scalarInput[i] = other.scalarInput[i];
+            }
+            for (int i = 0; i < other.binaryInput.Length && i < binaryInput.Length; ++i)
+            {
+                binaryInput[i] = other.binaryInput[i];   
+            }
+        }
+
         public override string ToString()
         {
             string data = $"PredictionInputRecord(f_tot:{scalarFillIndex} b_tot:{binaryFillIndex} | ";

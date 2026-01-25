@@ -11,13 +11,16 @@ namespace Prediction
         public static bool DEBUG = false;
         public static bool APPLY_FORCES_TO_EACH_CATCHUP_INPUT = false;
         public static bool USE_BUFFERING = true;
+        public static bool BUFFER_ONCE = true;
         public static int BUFFER_FULL_THRESHOLD = 3; //Number of ticks to buffer before starting to send out the updates
         public static bool CATCHUP = true;
+        public static bool INCREMENT_TICK_WHEN_NO_INPUT = false;
         public static bool SERVER_LOG_VELOCITIES = false;
         public static bool LOG_CLIENT_INUPTS = false;
+        public static bool APPLY_OLD_INPUTS_IN_CURRENT_TICK = false;
         
         public GameObject gameObject;
-        private PhysicsStateRecord serverStateBfr = new PhysicsStateRecord();
+        private PhysicsStateRecord serverStateBfr;
         private uint tickId;
         
         //TODO: package private
@@ -25,16 +28,13 @@ namespace Prediction
         
         //NOTE: Possible to buffer user inputs if needed to try and ensure a closer to client simulation on the server at the
         //cost of delaying the server behind the client by a small margin. The more you buffer, the more the server is delayed, the less reliable is the client image.
-
-        private bool bufferFilled = false;
-
         
+        private bool isBuffering = false;
+
         //NOTE: if the client updates buffer grows past a certain threshold
         //that means the server has fallen behind time wise. So we should snap ahead to the latest client state.
         public int catchupSections = 3;
         public int ticksPerCatchupSection = 0;
-        
-        private uint lastAppliedTick = 0;
         
         //STATS
         public uint invalidInputs = 0;
@@ -55,97 +55,153 @@ namespace Prediction
             inputQueue.emptyValue = null;
 
             ticksPerCatchupSection = Mathf.FloorToInt(bufferSize / catchupSections) + 1;
+            serverStateBfr = PhysicsStateRecord.AllocWithComponentState(GetStateFloatCount(), GetStateBoolCount());
         }
 
         DesyncEvent devt = new DesyncEvent();
         private bool noInputAvailableForTick = false;
+		bool tickUpdatedFromQueue = false;
+		bool tickShouldUpdate = false;
+		bool allInputsBehindTickId = false;
+		uint inputsBehindBy = 0;
+
         void HandleTickInput()
         {
             //NOTE: this also loads TickId with the latest value
-            int inputsToApply = 0;
-            uint maxDelay = inputQueue.GetRange();
-            if (maxDelay > maxClientDelay)
-            {
-                maxClientDelay = maxDelay;
-            }
-            
-            inputsToApply = GetInputsCount();
-            noInputAvailableForTick = inputsToApply == 0;
-            if (inputsToApply > 1)
-            {
-                catchupTicks += (uint) inputsToApply - 1U;
+			allInputsBehindTickId = false;
+			inputsBehindBy = 0;
+			
+			if (inputQueue.GetFill() > 0) {
+				allInputsBehindTickId = true;
+				uint maxDelay = inputQueue.GetRange();
+            	if (maxDelay > maxClientDelay)
+            	{
+                	maxClientDelay = maxDelay;
+            	}
+					
+				int inputsApplied = 0;
+				tickUpdatedFromQueue = false;
+				uint queueTickId = inputQueue.GetStartTick();
+                PredictionInputRecord nextInput;
+                do 
+				{
+					nextInput = inputQueue.Get(queueTickId);
+					if (queueTickId >= tickId) {
+                        int delta = (tickId > queueTickId ? -(int)(tickId - queueTickId) : (int)(queueTickId - tickId));
+                        if (delta > 1)
+                        {
+                            inputJumps++;
                 
-                devt.reason = DesyncReason.MULTIPLE_INPUTS_PER_FRAME;
-                devt.tickId = tickId;
-                potentialDesync.Dispatch(devt);
-            }
-            while (inputsToApply > 0)
-            {
-                inputsToApply--;
-                //NOTE: last applied input must not be removed as it will be when SamplePhysicsState runs...
-                //TODO: get rid of the side effect
-                PredictionInputRecord nextInput = TakeNextInput_TickSideEffect(inputsToApply > 0);
-                if (DEBUG)
-                    Debug.Log($"[ServerPredictedEntity][ServerSimulationTick] id:{id} goID:{gameObject.GetInstanceID()} lastAppliedTick:{lastAppliedTick} buffRange:{inputQueue.GetRange()} buffFill:{inputQueue.GetFill()} nextInput:{nextInput}");
-                
-                if (nextInput != null)
-                {
-                    if (LOG_CLIENT_INUPTS)
-                    {
-                        Debug.Log($"[SV][SIMULATION][INPUT] i:{id} t:{tickId} input:{nextInput}");
-                    }
-                    int delta = (int)(tickId > lastAppliedTick ? tickId - lastAppliedTick : lastAppliedTick - tickId);
-                    lastAppliedTick = tickId;
-                    if (delta > 1)
-                    {
-                        inputJumps++;
+                            devt.reason = DesyncReason.INPUT_JUMP;
+                            devt.tickId = queueTickId;
+                            potentialDesync.Dispatch(devt);
+                        }
                         
-                        devt.reason = DesyncReason.INPUT_JUMP;
-                        devt.tickId = tickId;
-                        potentialDesync.Dispatch(devt);
-                    }
-                
-                    if (ValidateState(TickDeltaToTimeDelta(delta), nextInput))
-                    {
-                        LoadInput(nextInput);
-                    }
-                    else
-                    {
-                        invalidInputs++;
+						tickId = queueTickId;
+						tickUpdatedFromQueue = true;
+						allInputsBehindTickId = false;
+						inputsBehindBy = 0;
                         
-                        devt.reason = DesyncReason.INVALID_INPUT;
-                        devt.tickId = tickId;
+                        LoadValidateApplyInput(tickId, nextInput);
+						break;
+					} 
+                    else if (APPLY_OLD_INPUTS_IN_CURRENT_TICK)
+                    {
+                        LoadValidateApplyInput(tickId, nextInput);
+                        
+                        devt.reason = DesyncReason.LATE_TICK;
+                        devt.tickId = queueTickId;
                         potentialDesync.Dispatch(devt);
                     }
                     
-                    if (APPLY_FORCES_TO_EACH_CATCHUP_INPUT)
-                    {
-                        ApplyForces();
-                    }
-                }
-            }
-            if (noInputAvailableForTick)
-            {
-                ticksWithoutInput++;
+					inputQueue.Remove(queueTickId);
+					//TODO: do something about this drifting behind
+					inputsBehindBy = tickId - queueTickId;
+					queueTickId++;
+					if (nextInput != null) {
+						inputsApplied++;
+					}
+				} while(nextInput != null);
+
+				if (inputsApplied > 1)
+            	{
+                	devt.reason = DesyncReason.MULTIPLE_INPUTS_PER_FRAME;
+                	devt.tickId = tickId;
+                	potentialDesync.Dispatch(devt);
+            	}
+			} 
+			else 
+			{
+				ticksWithoutInput++;
                 
                 devt.reason = DesyncReason.NO_INPUT_FOR_SERVER_TICK;
                 devt.tickId = tickId;
                 potentialDesync.Dispatch(devt);
-            }
-            if (!APPLY_FORCES_TO_EACH_CATCHUP_INPUT)
-            {
-                ApplyForces();
-            }
+			}
+		
+			ApplyForces();
         }
 
-        public uint ServerSimulationTick()
-        {
-            if (CanUseBuffer())
+        private uint lastInputLoadedTick = 0;
+		void LoadValidateApplyInput(uint qTickId, PredictionInputRecord nextInput) {
+			if (nextInput == null)
+	            return;
+
+            if (LOG_CLIENT_INUPTS)
             {
-                HandleTickInput();
+                Debug.Log($"[SV][SIMULATION][INPUT] i:{id} t:{qTickId} input:{nextInput}");
+            }
+
+            int delta = (int) (qTickId - lastInputLoadedTick);
+            if (ValidateState(TickDeltaToTimeDelta(delta), nextInput))
+            {
+                lastInputLoadedTick = qTickId;
+                LoadInput(nextInput);
             }
             else
             {
+                invalidInputs++;
+                
+                devt.reason = DesyncReason.INVALID_INPUT;
+                devt.tickId = qTickId;
+                potentialDesync.Dispatch(devt);
+            }
+		}
+		
+		public static bool LOG_INPUT_QUEUE_SIZE = true;
+        public uint ServerSimulationTick()
+        {
+			if (LOG_INPUT_QUEUE_SIZE)
+				Debug.Log($"[ServerPredictedEntity][ServerSimulationTick] i:{id} t:{tickId} inputBufferSize:{inputQueue.GetFill()}");
+            
+			if (CanUseBuffer())
+            {
+				//TODO: better mechanism for controlling when to update tickID?
+				tickShouldUpdate = false;
+				//NOTE: this runs even if the buffer is empty, and has the purpose of advancing the tick_id and applying forces.
+				HandleTickInput();
+                if (CATCHUP)
+                {
+                    int catchup = GetCatchupInputsCount();
+                    devt.reason = DesyncReason.CATCHUP;
+                    devt.tickId = tickId;
+                    potentialDesync.Dispatch(devt);
+                    
+                    while (catchup > 0)
+                    {
+                        catchup--;
+                        catchupTicks++;
+                        HandleTickInput();
+                    }   
+                }
+            }
+            else
+            {
+                //Tick only goes up on its own if no user input, if there is user input we go back to using those,
+                //if all of those are in the past, that means we're still somehow ahead of the client so don't continue increasing the tick_id
+                //once enough inputs from the client arrive, the tick_id will continue to increase. However this scenario should be logged, the client falling behind is a problem.
+				tickShouldUpdate = !isBuffering && INCREMENT_TICK_WHEN_NO_INPUT;
+                
                 if (inputQueue.GetFill() > 0)
                 {
                     totalBufferingTicks++;
@@ -167,11 +223,11 @@ namespace Prediction
             return GetTickId();
         }
 
-        int GetInputsCount()
+        int GetCatchupInputsCount()
         {
             if (!CATCHUP)
-                return 1;
-            return Mathf.FloorToInt(inputQueue.GetFill() / ticksPerCatchupSection) + 1;
+                return 0;
+            return Mathf.FloorToInt(inputQueue.GetFill() / ticksPerCatchupSection);
         }
         
         public PhysicsStateRecord SamplePhysicsState()
@@ -179,17 +235,21 @@ namespace Prediction
             preSampleState.Dispatch(true);
             PopulatePhysicsStateRecord(GetTickId(), serverStateBfr);
             serverStateBfr.input = inputQueue.Remove(GetTickId());
-            UpdateBufferStateOnRemoval();
+            SampleComponentState(serverStateBfr);
             stateSampled.Dispatch(true);
             
-            if (DEBUG)
+			if (DEBUG)
                 Debug.Log($"[ServerPredictedEntity][SamplePhysicsState]({id}) input:{serverStateBfr}");
             
             if (SERVER_LOG_VELOCITIES)
             {
                 //TODO: this can be done via events in the host application...
-                Debug.Log($"[SV][SIMULATION][DATA] i:{id} t:{tickId} p:{rigidbody.position.ToString("F10")} r:{rigidbody.rotation.ToString("F10")} v:{rigidbody.linearVelocity.ToString("F10")} a:{rigidbody.angularVelocity.ToString("F10")}");
+                Debug.Log($"[SV][SIMULATION][DATA] i:{id} t:{tickId} p:{rigidbody.position.ToString("F10")} r:{rigidbody.rotation.ToString("F10")} v:{rigidbody.linearVelocity.ToString("F10")} a:{rigidbody.angularVelocity.ToString("F10")} input:{serverStateBfr.input}");
             }
+
+			if (tickShouldUpdate) {
+				tickId++;
+			}
             return serverStateBfr;
         }
 
@@ -213,30 +273,27 @@ namespace Prediction
             }
 
             clUpdateCount++;
-            if (clientTickId > tickId)
+            if (inputQueue.GetFill() == inputQueue.GetCapacity())
             {
-                if (inputQueue.GetFill() == inputQueue.GetCapacity())
-                {
-                    devt.reason = DesyncReason.TICK_OVERFLOW;
-                    devt.tickId = tickId;
-                    potentialDesync.Dispatch(devt);
-                }
-                
-                clAddedUpdateCount++;
-                inputQueue.Add(clientTickId, inputRecord);
+                devt.reason = DesyncReason.TICK_OVERFLOW;
+                devt.tickId = tickId;
+                potentialDesync.Dispatch(devt);
             }
-            else
+            clAddedUpdateCount++;
+            inputQueue.Add(clientTickId, inputRecord);
+            
+            if (clientTickId < tickId)
             {
                 lateTickCount++;
-
                 devt.reason = DesyncReason.LATE_TICK;
                 devt.tickId = tickId;
                 potentialDesync.Dispatch(devt);
             }
 
-            if (!bufferFilled)
+            if (isBuffering)
             {
-                bufferFilled = inputQueue.GetFill() >= BUFFER_FULL_THRESHOLD;
+                isBuffering = inputQueue.GetFill() < BUFFER_FULL_THRESHOLD;
+	
             }
 
             if (LOG_CLIENT_INUPTS)
@@ -252,6 +309,7 @@ namespace Prediction
             //NOTE: use this when changing the controller of the plane.
             tickId = 0;
             inputQueue.Clear();
+            isBuffering = USE_BUFFERING;
         }
         
         public uint GetTickId()
@@ -259,41 +317,10 @@ namespace Prediction
             return tickId;
         }
 
-        public PredictionInputRecord TakeNextInput_TickSideEffect(bool remove)
-        {
-            if (!CanUseBuffer())
-            {
-                return null;
-            }
-
-            uint newTick = inputQueue.GetNextTick(tickId);
-            if (newTick > 0)
-            {
-                tickId = newTick;
-                if (remove)
-                {
-                    var r = inputQueue.Remove(tickId);
-                    UpdateBufferStateOnRemoval();
-                    return r;
-                }
-                return inputQueue.Get(newTick);
-            }
-            return inputQueue.emptyValue;
-        }
-
         //TODO: unit test the buffering
         bool CanUseBuffer()
         {
-            if (!USE_BUFFERING)
-                return true;
-            
-            return bufferFilled && inputQueue.GetFill() > 0;
-        }
-
-        void UpdateBufferStateOnRemoval()
-        { 
-            if (inputQueue.GetFill() == 0)
-                bufferFilled = false;
+            return !isBuffering;
         }
 
         public int BufferFill()
@@ -310,8 +337,8 @@ namespace Prediction
         public void Reset()
         {
             inputQueue.Clear();
-            bufferFilled = false;
-            tickId = 0;
+			isBuffering = USE_BUFFERING;
+			tickId = 0;
             
             invalidInputs = 0;
             ticksWithoutInput = 0;
@@ -329,7 +356,6 @@ namespace Prediction
             PredictionInputRecord pir = inputQueue.GetEnd();
             inputQueue.Clear();
             inputQueue.Add(tick, pir);
-            bufferFilled = false;
         }
 
         public enum DesyncReason
@@ -341,6 +367,7 @@ namespace Prediction
             INVALID_INPUT = 4,
             LATE_TICK = 5,
             TICK_OVERFLOW = 6,
+			CATCHUP = 7,
         }
         public struct DesyncEvent
         {

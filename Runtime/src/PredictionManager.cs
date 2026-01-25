@@ -400,7 +400,6 @@ namespace Prediction
         long preSimDuration = 0;
         long postSimDuration = 0;
 
-        private PhysicsStateRecord specialHostRecord = new PhysicsStateRecord();
         //TODO: package private
         public void Tick()
         {    

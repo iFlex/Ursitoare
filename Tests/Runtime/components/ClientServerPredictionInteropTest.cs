@@ -65,6 +65,7 @@ namespace Prediction.Tests
                 serverEntity.ServerSimulationTick();
                 PhysicsStateRecord serverRecord = serverEntity.SamplePhysicsState();
                 clientEntity.BufferServerTick(tickId, serverRecord);
+                Assert.AreEqual(tickId, serverRecord.tickId);
                 Assert.AreEqual(serverRecord.position, clientRigidbody.position);
                 Assert.AreEqual(serverRigidbody.position, clientRigidbody.position);
             }

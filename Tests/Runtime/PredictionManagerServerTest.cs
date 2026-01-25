@@ -89,7 +89,7 @@ namespace Prediction.Tests
         }
         
         [Test]
-        public void CheckUpdates_WithClientInput()
+        public void CheckUpdates_WithClientInput_TicksKeepIncreasingEvenWithoutClientInput()
         {
             manager.useServerWorldStateMessage = false;
             List<StateUpdate> sentStates = new List<StateUpdate>();
@@ -98,7 +98,7 @@ namespace Prediction.Tests
                 StateUpdate su = new StateUpdate();
                 su.connId = connId;
                 su.entityId = entityId;
-                su.state = new PhysicsStateRecord();
+                su.state = PhysicsStateRecord.Alloc();
                 su.state.From(state);
                 sentStates.Add(su);
             };
@@ -169,10 +169,10 @@ namespace Prediction.Tests
             su31 = StateUpdate.FindBy(3, 1, sentStates);
             su32 = StateUpdate.FindBy(3, 2, sentStates);
             
-            Assert.AreEqual(10, su11.state.tickId);
-            Assert.AreEqual(10, su12.state.tickId);
-            Assert.AreEqual(15, su21.state.tickId);
-            Assert.AreEqual(15, su22.state.tickId);
+            Assert.AreEqual(11, su11.state.tickId);
+            Assert.AreEqual(11, su12.state.tickId);
+            Assert.AreEqual(16, su21.state.tickId);
+            Assert.AreEqual(16, su22.state.tickId);
             Assert.AreEqual(3, su31.state.tickId);
             Assert.AreEqual(3, su32.state.tickId);
             sentStates.Clear();
@@ -190,8 +190,8 @@ namespace Prediction.Tests
             
             Assert.AreEqual(12, su11.state.tickId);
             Assert.AreEqual(12, su12.state.tickId);
-            Assert.AreEqual(16, su21.state.tickId);
-            Assert.AreEqual(16, su22.state.tickId);
+            Assert.AreEqual(17, su21.state.tickId);
+            Assert.AreEqual(17, su22.state.tickId);
             Assert.AreEqual(4, su31.state.tickId);
             Assert.AreEqual(4, su32.state.tickId);
         }

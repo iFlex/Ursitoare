@@ -128,7 +128,8 @@ namespace Prediction.Simulation
             RingBuffer<PhysicsStateRecord> ringBuffer = new RingBuffer<PhysicsStateRecord>(bufferSize);
             for (int i = 0; i < bufferSize; i++)
             {
-                ringBuffer.Set(i, (new PhysicsStateRecord()).Empty());
+                //NOTE: the physics controller doesn't account for complex vehicles with rewindable internal state. So we rely on the PredictionManager to rewind that state.
+                ringBuffer.Set(i, PhysicsStateRecord.Alloc());
             }
             worldHistory[rigidbody] = ringBuffer;
             //rigidbody.maxDepenetrationVelocity = MAX_DEPENTRATION_SPEED;

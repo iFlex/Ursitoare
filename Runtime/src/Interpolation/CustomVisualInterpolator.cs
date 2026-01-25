@@ -241,7 +241,7 @@ namespace Adapters.Prediction
             lastAddTime = totalTime;
             
             //NOTE: do not use record as is without deep copy... memory will be altered by prediction...
-            PhysicsStateRecord newData = new PhysicsStateRecord();
+            PhysicsStateRecord newData = PhysicsStateRecord.Alloc();
             newData.From(record);
             buffer.Add(newData);
             averagedBuffer.Add(GetNextProcessedState());
@@ -307,8 +307,7 @@ namespace Adapters.Prediction
         
         public PhysicsStateRecord GetNextProcessedState()
         {
-            PhysicsStateRecord psr = new PhysicsStateRecord();
-            psr.Empty();
+            PhysicsStateRecord psr = PhysicsStateRecord.Alloc();
             psr.tickId = smoothingTick;
             smoothingTick++;
             

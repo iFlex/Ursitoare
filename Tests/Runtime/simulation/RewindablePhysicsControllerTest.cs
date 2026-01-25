@@ -35,13 +35,13 @@ namespace Prediction.Tests.simulation
             controller.Track(rigidbody2);
             controller.Track(rigidbody3);
             
-            PhysicsStateRecord final1 = new PhysicsStateRecord();
-            PhysicsStateRecord final2 = new PhysicsStateRecord();
-            PhysicsStateRecord final3 = new PhysicsStateRecord();
+            PhysicsStateRecord final1 = PhysicsStateRecord.Alloc();
+            PhysicsStateRecord final2 = PhysicsStateRecord.Alloc();
+            PhysicsStateRecord final3 = PhysicsStateRecord.Alloc();
             
-            PhysicsStateRecord psr1 = new PhysicsStateRecord();
-            PhysicsStateRecord psr2 = new PhysicsStateRecord();
-            PhysicsStateRecord psr3 = new PhysicsStateRecord();
+            PhysicsStateRecord psr1 = PhysicsStateRecord.Alloc();
+            PhysicsStateRecord psr2 = PhysicsStateRecord.Alloc();
+            PhysicsStateRecord psr3 = PhysicsStateRecord.Alloc();
             
             uint rewindBy = 5;
             uint maxTick = 11;

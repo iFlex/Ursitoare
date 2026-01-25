@@ -81,7 +81,7 @@ namespace Prediction.Tests
             for (int i = 0; i < inputs.Length; i++)
             {
                 rigidbody.position += inputs[i];
-                states[i] = new PhysicsStateRecord();
+                states[i] = PhysicsStateRecord.Alloc();
                 states[i].From(rigidbody);
                 states[i].tickId = (uint) i;
             }

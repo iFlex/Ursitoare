@@ -11,7 +11,10 @@ namespace Prediction
 
         protected PredictableControllableComponent[] controllablePredictionContributors;
         protected PredictableComponent[] predictionContributors;
+        protected PredictableComponent[] statefulComponents = new PredictableComponent[0];
 
+        protected int totalStateFloats = 0;
+        protected int totalStateBools = 0;
         protected int totalFloatInputs = 0;
         protected int totalBinaryInputs = 0;
         protected bool isControllable = false;
@@ -25,10 +28,32 @@ namespace Prediction
             this.predictionContributors = predictionContributors;
             
             isControllable = controllablePredictionContributors.Length > 0;
+
+            int statefulComponentCount = 0;
             for (int i = 0; i < controllablePredictionContributors.Length; i++)
             {
                 totalFloatInputs += controllablePredictionContributors[i].GetFloatInputCount();
                 totalBinaryInputs += controllablePredictionContributors[i].GetBinaryInputCount();
+            }
+
+            for (int i = 0; i < predictionContributors.Length; i++)
+            {
+                if (predictionContributors[i].HasState())
+                {
+                    statefulComponentCount++;
+                    totalStateFloats += predictionContributors[i].GetStateFloatCount();
+                    totalBinaryInputs += predictionContributors[i].GetStateBoolCount();
+                }
+            }
+            
+            statefulComponents = new PredictableComponent[statefulComponentCount];
+            int j = 0;
+            for (int i = 0; i < predictionContributors.Length; i++)
+            {
+                if (predictionContributors[i].HasState())
+                {
+                    statefulComponents[j++] = predictionContributors[i];
+                }
             }
         }
         
@@ -74,7 +99,31 @@ namespace Prediction
                 predictionContributors[i].ApplyForces();
             }
         }
-        
+
+        public void SampleComponentState(PhysicsStateRecord psr)
+        {
+            if (psr.componentState != null)
+            {
+                psr.componentState.WriteReset();
+            }
+            for (int i = 0; i < statefulComponents.Length; ++i)
+            {
+                statefulComponents[i].SampleComponentState(psr);
+            }
+        }
+    
+        public void LoadComponentState(PhysicsStateRecord psr)
+        {
+            if (psr.componentState != null)
+            {
+                psr.componentState.ReadReset();
+            }
+            for (int i = 0; i < statefulComponents.Length; ++i)
+            {
+                statefulComponents[i].LoadComponentState(psr);
+            }
+        }
+
         public override int GetHashCode()
         {
             return (int) id;
@@ -83,6 +132,21 @@ namespace Prediction
         public bool IsControllable()
         {
             return isControllable;
+        }
+        
+        public virtual bool HasState()
+        {
+            return false;
+        }
+        
+        public int GetStateFloatCount()
+        {
+            return totalFloatInputs;
+        }
+
+        public int GetStateBoolCount()
+        {
+            return totalStateBools;
         }
     }
 }

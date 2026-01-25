@@ -67,7 +67,7 @@ namespace Prediction.Simulation
 
         public void Track(Rigidbody rigidbody)
         {
-            PhysicsStateRecord record = new PhysicsStateRecord();
+            PhysicsStateRecord record = PhysicsStateRecord.Alloc();
             record.From(rigidbody);
             trackedBodies[rigidbody] = record;
         }

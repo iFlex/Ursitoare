@@ -52,6 +52,31 @@ namespace Prediction.Tests.mocks
                 rigidbody.position += stateVector;
             }
         }
+
+        public bool HasState()
+        {
+            return false;
+        }
+
+        public void SampleComponentState(PhysicsStateRecord physicsStateRecord)
+        {
+            //NOOP
+        }
+
+        public void LoadComponentState(PhysicsStateRecord physicsStateRecord)
+        {
+            //NOOP
+        }
+
+        public int GetStateFloatCount()
+        {
+            return 0;
+        }
+
+        public int GetStateBoolCount()
+        {
+            return 0;
+        }
     }
 }
 #endif

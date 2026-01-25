@@ -122,10 +122,11 @@ namespace Prediction.policies.singleInstance
             if (LOG_ALL_CHECKS)
             {
                 Log(entityId, tickId, distD, angD, vdelta, avdelta, false);
+                Debug.Log($"[CHECK][DATA] i:{entityId} t:{tickId} client:{local} server:{server}");
             }
             return PredictionDecision.NOOP;
         }
-
+        
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Log(uint entityId, uint tickId, float distD, float angD, float vdelta, float avdelta, bool isResim)
         {

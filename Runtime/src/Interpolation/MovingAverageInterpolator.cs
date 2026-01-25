@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
+using Adapters.Prediction;
 using Prediction.data;
 using Prediction.utils;
 using UnityEngine;
@@ -8,25 +10,32 @@ namespace Prediction.Interpolation
     //TODO: do we need a common interpolator class with the buffering logic? can this live in the visuals class?
     public class MovingAverageInterpolator: VisualsInterpolationsProvider
     {
+        public static bool DEBUG = true;
+        public static bool LOG_POS = true;
+        public static bool DEEP_DEBUG = false;
         public static int DEBUG_COUNTER = 0;
-        public static int FOLLOWER_SMOOTH_WINDOW = 6;
+        public static int FOLLOWER_SMOOTH_WINDOW = 4;
+        public static bool USE_INTERPOLATION = true;
+        public static bool USE_SMOOTH_BUFFER = true;
+        public static int BUFFER_SIZE = 60;
+        public static int SMOOTH_BUFFER_SIZE = 6;
+        public static bool INTERPOLATE_MANUAL = false;
         
-        RingBuffer<PhysicsStateRecord> buffer = new RingBuffer<PhysicsStateRecord>(200);
-        public RingBuffer<PhysicsStateRecord> averagedBuffer = new RingBuffer<PhysicsStateRecord>(3);
+        RingBuffer<PhysicsStateRecord> buffer = new RingBuffer<PhysicsStateRecord>(BUFFER_SIZE);
+        public RingBuffer<PhysicsStateRecord> averagedBuffer = new RingBuffer<PhysicsStateRecord>(SMOOTH_BUFFER_SIZE);
 
         private Transform target;
         private double tickInterval = Time.fixedDeltaTime;
         
         private double time = 0;
-        private bool interpStarted = false;
         private uint smoothingTick = 0;
-        
-        
+
+        public static int startAfterBfrTicks = 2;
         public int slidingWindowTickSize = 6;
-        public int startAfterBfrTicks = 2;
+        
+        public bool autosizeWindow = false;
         public float MinVisualDelay = 0.5f;
         public uint minVisualTickDelay = 2;
-        public bool autosizeWindow = false;
         public Func<uint> GetServerTickLag;
         
         public int debugCounterLocal;
@@ -52,148 +61,309 @@ namespace Prediction.Interpolation
             }
         }
 
-        private uint pervTick = 0;
-        public void Update(float deltaTime, uint tickId)
+        private PosAnalyser _posAnalyser = new PosAnalyser();
+        private double totalTime = 0;
+        private float lastDt = 0;
+        
+        public void Update(float deltaTime, uint currentTick)
         {
-            if (!CanStartInterpolation())
-                return;
-            
+            totalTime += deltaTime;
+            /*
             if (autosizeWindow)
             {
                 uint serverTickLag = GetServerTickLag();
                 slidingWindowTickSize = (int) Math.Max(minVisualTickDelay, serverTickLag / 2);
             }
-            time += deltaTime;
-            
-            float interpolationProgress = 1f;
-            PhysicsStateRecord psr = null;
-            if (!interpStarted)
+            */
+            lastDt = deltaTime;
+            if (CanStartInterpolation())
             {
-                psr = GetInterpolationStartState();
-                if (psr == null)
+                GetNextInterpolationTarget(time, out PhysicsStateRecord from, out PhysicsStateRecord to, out float interpTarget, out bool hasFrame);
+                if (!hasFrame)
                 {
-                    Debug.Log($"[LERP]({debugCounterLocal}) WARNING. no data");
+                    Debug.Log($"[CustomVisualInterpolator][Update][LERP]({target.gameObject.GetInstanceID()})({debugCounterLocal}) WARNING. no data! time:{time} dTime:{deltaTime} startTime:{GetTime(GetInterpolationBuffer().GetStart())} fill:{GetInterpolationBuffer().GetFill()}");
                     return;
                 }
                 
-                time = GetTime(psr);
-                interpStarted = true;
-                pervTick = psr.tickId;
+                if (DEBUG)
+                {
+                    Debug.Log($"[CustomVisualInterpolator][ApplyState]({target.gameObject.GetInstanceID()}) intT:{interpTarget} dt:{lastDt} time:{time} from({GetTime(from)})[Tid:{from.tickId}] to({GetTime(to)})[Tid:{to.tickId}]");
+                }
+
+                if (INTERPOLATE_MANUAL)
+                {
+                    float t = 1;
+                    double targetTime = GetTime(to);
+                    double budget = targetTime - time;
+                    if (budget > 0 && deltaTime < budget)
+                    {
+                        t = (float) (deltaTime / budget);
+                    }
+                
+                    target.position = Vector3.Lerp(target.position, to.position, t);
+                    target.rotation = Quaternion.Slerp(target.rotation, to.rotation, t);
+                    _posAnalyser.LogAndPrintPosRot("SELF_LERP", target.position, target.rotation);
+                }
+                else
+                {
+                    ApplyState(from, to, interpTarget);
+                }
+                
+                if (interpTarget == 1f)
+                {
+                    Debug.Log($"[CustomVisualInterpolator][ApplyState] NOT_ENOUGH_DATA_IN_BUFFER, this shouldn't be possible... Time has be set to end of buffer in waiting for more data");
+                    time = GetTime(to);
+                }
+                time += deltaTime;
+            } 
+            else if (GetInterpolationBuffer().GetFill() > 0)
+            {
+                PhysicsStateRecord start = GetInterpolationBuffer().GetStart();
+                time = GetTime(start);
+                if (DEBUG)
+                {
+                    Debug.Log($"[CustomVisualInterpolator][Update]({target.gameObject.GetInstanceID()}) time:{time} fill:{GetInterpolationBuffer().GetFill()} start:{start} startTime:{GetTime(GetInterpolationBuffer().GetStart())}");
+                }
+            }
+        }
+        
+        private Vector3 prevPos = Vector3.zero;
+        private Vector3 pos = Vector3.zero;
+        //NOTE: the problem here is that our averaged state is jumping around somehow...
+        void ApplyState(PhysicsStateRecord from, PhysicsStateRecord to, float t)
+        {
+            prevPos = pos;
+            pos = target.position;
+
+            if (USE_INTERPOLATION)
+            {
+                target.position = Vector3.Lerp(from.position, to.position, t);
+                target.rotation = Quaternion.Slerp(from.rotation, to.rotation, t); 
+                //Note, no simulated rigid body for the visuals, no need to look at the physics data.
             }
             else
             {
-                psr = GetNextInterpolationTarget(time);
-                if (psr == null)
-                {
-                    Debug.Log($"[LERP]({debugCounterLocal}) WARNING. no data");
-                    return;
-                }
-                
-                double targetTime = GetTime(psr);
-                interpolationProgress = (float)((targetTime - time) / tickInterval);
-                uint delta = psr.tickId - pervTick;
-                if (delta > 1)
-                {
-                    //Debug.Log($"[LERP]({debugCounterLocal}) WARNING. Smooth Lerb skipped {delta} ticks.");
-                }
-                pervTick = psr.tickId;
-                //Debug.Log($"[LERP]({debugCounterLocal}) time:{time} targetTime:{targetTime} ttik:{psr.tickId} it:{interpolationProgress}  tickInterval:{tickInterval} deltaTime:{Time.deltaTime}");
+                target.position = to.position;
+                target.rotation = to.rotation; 
             }
-            ApplyState(psr, interpolationProgress);
+            
+            //TODO: apply rotation in relation to own current rotation as experiment
+            _posAnalyser.LogAndPrintPosRot("SELF_LERP", target.position, target.rotation);
+            if (DEBUG)
+            {
+                float dist = (target.position - pos).magnitude;
+                Vector3 crntDir = target.position - pos;
+                Vector3 pastDir = pos - prevPos;
+                float angle = Mathf.Abs(Vector3.Angle(crntDir, pastDir));
+                Debug.Log($"[CustomVisualInterpolator][DT_DBG][VISUAL_ADVANCE]{(angle > ANGLE_THRESHOLD ? "[BREACH]" : "")} dist:{dist} angle:{angle}");
+            }
         }
-
-        void ApplyState(PhysicsStateRecord psr, float t)
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        double GetTime(uint tickId)
         {
-            target.position = Vector3.Lerp(target.position, psr.position, t);
-            target.rotation = Quaternion.Lerp(target.rotation, psr.rotation, t);
-            //Note, no simulated rigid body for the visuals, no need to look at the physics data.
+            return tickId * tickInterval;
         }
-
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         double GetTime(PhysicsStateRecord record)
         {
-            return record.tickId * tickInterval;
+            return GetTime(record.tickId);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         bool CanStartInterpolation()
         {
-            return averagedBuffer.GetFill() >= startAfterBfrTicks;
+            if (DEEP_DEBUG)
+            {
+                Debug.Log($"[CustomVisualInterpolator][CanStartInterpolation]({target.gameObject.GetInstanceID()}) Fill:{GetInterpolationBuffer().GetFill()}");
+            }
+            return GetInterpolationBuffer().GetFill() >= startAfterBfrTicks;
         }
         
-        PhysicsStateRecord GetInterpolationStartState()
+        //NOTE: this is broken, interpolation time is somehow always ahead of the god damned buffer...
+        void GetNextInterpolationTarget(double time, out PhysicsStateRecord from, out PhysicsStateRecord to, out float t, out bool hasFrame)
         {
-            return averagedBuffer.GetStart();
-        }
-        
-        PhysicsStateRecord GetNextInterpolationTarget(double time)
-        {
-            int fill = averagedBuffer.GetFill();
-            int index = averagedBuffer.GetStartIndex();
+            from = null;
+            to = null;
+            t = 0;
+            hasFrame = false;
+            
+            int fill = GetInterpolationBuffer().GetFill();
+            int index = GetInterpolationBuffer().GetStartIndex();
             do
             {
-                PhysicsStateRecord psr = averagedBuffer.Get(index);
-                if (GetTime(psr) > time)
+                from = to;
+                to = GetInterpolationBuffer().Get(index);
+                //if (DEBUG && from != null && to != null)
+                //{
+                //    Debug.Log($"[CustomVisualInterpolator][GetNextInterpolationTarget][CHECK] time:{time} from({GetTime(from)}):{from} to({GetTime(to)}):{to}");
+                //}
+                
+                if (time == 0 || GetTime(to) > time)
                 {
-                    return psr;
+                    if (from == null)
+                    {
+                        //NOTE: not enough data in the buffer yet for interpolation
+                        continue;
+                    }
+                    
+                    t = (float)((time - GetTime(from)) / tickInterval);
+                    if (t < 0)
+                    {
+                        Debug.Log($"[CustomVisualInterpolator][GetNextInterpolationTarget] negative interpolation target:{t}");
+                        t = 0;
+                    }
+                    hasFrame = true;
+                    return;
                 }
 
                 index++;
-                index %= averagedBuffer.GetFill();
                 fill--;
             }
             while(fill > 0);
-
-            //NOTE: should not be possible
-            return null;
+            
+            t = 1;
+            hasFrame = from != null && to != null;
+            Debug.Log($"[CustomVisualInterpolator][GetNextInterpolationTarget][TIME_PAST_END_OF_BFR] time:{time} toT:{(to == null ? "X" :GetTime(to))} fromT:{(from == null ? "X": GetTime(from))} startT:{(GetInterpolationBuffer().GetFill() == 0 ? "X" : GetTime(GetInterpolationBuffer().GetStart()))} fill:{GetInterpolationBuffer().GetFill()}");
         }
         
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private RingBuffer<PhysicsStateRecord> GetInterpolationBuffer()
+        {
+            if (USE_SMOOTH_BUFFER)
+                return averagedBuffer;
+            return buffer;
+        }
+
+
+        public static Vector3 GetDirVector(PhysicsStateRecord from, PhysicsStateRecord to)
+        {
+            return to.position - from.position;
+        }
+
+        private double lastAddTime;
+        public static float ANGLE_THRESHOLD = 120;
+
         public void Add(PhysicsStateRecord record)
         {
-            buffer.Add(record);
+            if (LOG_POS)
+            {
+                Debug.Log($"[Visuals][Positions] t:{record.tickId} pos:{record.position} rot:{record.rotation}");
+            }
+            
+            double deltaAdd = totalTime - lastAddTime;
+            if (deltaAdd > Time.fixedDeltaTime) 
+            {
+                float percent = (float)(deltaAdd / Time.fixedDeltaTime);
+                Debug.Log($"[CustomVisualInterpolator][DT_DBG][LATE_ADD] t:{record.tickId} deltaTime:{deltaAdd} shouldBe:{Time.fixedDeltaTime} missBy:{deltaAdd - Time.fixedDeltaTime} p:{percent}");
+            }
+            lastAddTime = totalTime;
+            
+            //NOTE: do not use record as is without deep copy... memory will be altered by prediction...
+            PhysicsStateRecord newData = PhysicsStateRecord.Alloc();
+            newData.From(record);
+            buffer.Add(newData);
             averagedBuffer.Add(GetNextProcessedState());
-        }
-
-        QuaternionAverage _quatAverager = new QuaternionAverage();
-        void AddToWindow(PhysicsStateRecord accumulator, PhysicsStateRecord newItem)
-        {
-            accumulator.position += newItem.position
-            _quatAverager.AccumulateRot(newItem.rotation);
-        }
-
-        void FinalizeWindow(PhysicsStateRecord accumulator, int count)
-        {
-            accumulator.position /= count;
-            accumulator.rotation = quaternionAverage.GetAverageRotation(count);
-            quaternionAverage.Reset();
+            
+            if (LOG_POS)
+            {
+                Debug.Log($"[Visuals][Positions] t:{record.tickId} pos:{record.position} rot:{record.rotation} posAng:{CustomVisualInterpolator.GetBufferEndAngle(buffer)}");
+                PhysicsStateRecord smthR = averagedBuffer.GetEnd();
+                Debug.Log($"[Visuals][SmoothState] t:{record.tickId} st:{smthR.tickId} pos:{smthR.position} rot:{smthR.rotation} posAng:{CustomVisualInterpolator.GetBufferEndAngle(averagedBuffer)}");
+            }
+            
+            if (DEBUG)
+            {
+                double endTime = GetInterpolationBuffer().GetFill() == 0
+                    ? 0
+                    : GetTime(GetInterpolationBuffer().GetEnd());
+                Debug.Log($"[CustomVisualInterpolator][DT_DBG][Add]{(time > endTime ? "[LATE]":"[OK]")} FrameNo:{Time.frameCount} deltaT:{deltaAdd} time:{time} EndTime:{endTime} tickId:{record.tickId} startTick:{buffer.GetStart().tickId} endTick:{buffer.GetEnd().tickId} startIndex:{buffer.GetStartIndex()} endIndex:{buffer.GetEndIndex()} DATA:{record}");
+                
+                if (buffer.GetFill() > 1)
+                {
+                    LogBufferEndStats(buffer, "[BUFFER_NORMAL_ADVANCE]");
+                }
+                if (averagedBuffer.GetFill() > 1)
+                {
+                    LogBufferEndStats(averagedBuffer, "[BUFFER_SMOOTH_ADVANCE]");
+                }
+            }
         }
         
-        PhysicsStateRecord GetNextProcessedState()
+        public static float GetBufferEndAngle(RingBuffer<PhysicsStateRecord> bfr) 
         {
-            PhysicsStateRecord psr = new PhysicsStateRecord();
+            Vector3 crntDir = GetDirVector(GetWithOffset(bfr, -1), bfr.GetEnd());
+            Vector3 pastDir = GetDirVector(GetWithOffset(bfr, -2), GetWithOffset(bfr, -1));
+            return Mathf.Abs(Vector3.Angle(crntDir, pastDir));
+        }
+        
+        static void LogBufferEndStats(RingBuffer<PhysicsStateRecord> bfr, string prefix)
+        {
+            float dist = (GetWithOffset(bfr, -1).position - bfr.GetEnd().position).magnitude;
+            Vector3 crntDir = GetDirVector(GetWithOffset(bfr, -1), bfr.GetEnd());
+            Vector3 pastDir = GetDirVector(GetWithOffset(bfr, -2), GetWithOffset(bfr, -1));
+            float angle = Mathf.Abs(Vector3.Angle(crntDir, pastDir));
+            Debug.Log($"[CustomVisualInterpolator][DT_DBG]{prefix}{(angle > ANGLE_THRESHOLD ? "[BREACH]" : "")} dist:{dist} angle:{angle} DATA:{bfr.GetEnd()} DATA_PREV:{GetWithOffset(bfr, -1)}");
+        }
+        
+        public static PhysicsStateRecord GetWithOffset(RingBuffer<PhysicsStateRecord> bfr, int offset)
+        {
+            int pos = bfr.GetEndIndex() - 1;
+            pos += offset;
+            if (pos < 0)
+            {
+                pos = bfr.GetCapacity() + pos;
+            }
+            pos = pos % bfr.GetCapacity();
+            return bfr.Get(pos);
+        }
+
+        private QuaternionAverage _quaternionAverage = new();
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void AddToWindow(PhysicsStateRecord accumulator, PhysicsStateRecord newItem)
+        {
+            accumulator.position += newItem.position;
+            _quaternionAverage.AccumulateRot(newItem.rotation);
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void FinalizeWindow(PhysicsStateRecord accumulator, int count)
+        {
+            accumulator.position /= count;
+            accumulator.rotation = _quaternionAverage.GetAverageRotation(count);
+            _quaternionAverage.Reset();
+        }
+        
+        public PhysicsStateRecord GetNextProcessedState()
+        {
+            PhysicsStateRecord psr = PhysicsStateRecord.Alloc();
             psr.tickId = smoothingTick;
             smoothingTick++;
             
-            if (buffer.GetFill() < slidingWindowTickSize)
+            int windowSize = Math.Min(slidingWindowTickSize, buffer.GetFill());
+            //NOTE: end index is always a non added position.
+            int index = buffer.GetEndIndex() - windowSize;
+            if (index < 0)
             {
-                for (int i = buffer.GetStartIndex(); i < buffer.GetEndIndex(); ++i)
-                {
-                    AddToWindow(psr, buffer.Get(i));
-                }
-                FinalizeWindow(psr, buffer.GetFill());
-                return psr;
+                index = buffer.GetCapacity() + index;
             }
             
-            int index = buffer.GetEndIndex();
-            for (int i = 0; i < slidingWindowTickSize; ++i)
+            for (int i = 0; i < windowSize; ++i)
             {
-                index--;
-                if (index < 0)
-                {
-                    index = buffer.GetCapacity() - 1;
-                }
-                
                 AddToWindow(psr, buffer.Get(index));
+                if (DEEP_DEBUG)
+                {
+                    Debug.Log($"[CustomVisualInterpolator][GetNextProcessedState][AddToWindow] Fill:{buffer.GetFill()} WindowSize:{windowSize} index:{index} addedTickId:{buffer.Get(index).tickId} endIndex:{buffer.GetEndIndex()} DATA:{psr} ADD_DATA:{buffer.Get(index)}");
+                }
+                index++;
             }
-            FinalizeWindow(psr, slidingWindowTickSize);
+            FinalizeWindow(psr, windowSize);
+
+            if (DEEP_DEBUG && averagedBuffer.GetFill() > 1)
+            {
+                Debug.Log($"[CustomVisualInterpolator][GetNextProcessedState][FinalizeWindow] tickId:{psr.tickId} startIndex:{averagedBuffer.GetStartIndex()} endIndex:{averagedBuffer.GetEndIndex()} startTick:{averagedBuffer.GetStart().tickId} endTick:{averagedBuffer.GetEnd().tickId} DATA:{psr}");
+            }
             return psr;
         }
 
@@ -211,7 +381,7 @@ namespace Prediction.Interpolation
         {
             if (isLocalAuthority)
             {
-                slidingWindowTickSize = 6;
+                slidingWindowTickSize = FOLLOWER_SMOOTH_WINDOW;
             }
             else
             {
