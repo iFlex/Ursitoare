@@ -597,7 +597,6 @@ namespace Prediction
             ticksSinceResim = 0;
             resimulatedThisTick = true;
             
-            onPreResimTick.Dispatch(startTick);
             //TODO: decide what to do with these hooks...
             PHYSICS_CONTROLLER.BeforeResimulate(null);
             if (maxRewindDistance < rewind)
