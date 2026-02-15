@@ -141,7 +141,7 @@ namespace Prediction
         
         public int GetStateFloatCount()
         {
-            return totalFloatInputs;
+            return totalStateFloats;
         }
 
         public int GetStateBoolCount()
