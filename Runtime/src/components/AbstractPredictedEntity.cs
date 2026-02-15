@@ -42,7 +42,7 @@ namespace Prediction
                 {
                     statefulComponentCount++;
                     totalStateFloats += predictionContributors[i].GetStateFloatCount();
-                    totalBinaryInputs += predictionContributors[i].GetStateBoolCount();
+                    totalStateBools += predictionContributors[i].GetStateBoolCount();
                 }
             }
             

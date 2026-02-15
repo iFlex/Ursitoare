@@ -415,6 +415,8 @@ namespace Prediction
             preSimDuration = System.Diagnostics.Stopwatch.GetTimestamp();
             tickDuration = preSimDuration;
 
+            onPreTick.Dispatch(tickId);
+            
             ClientPreSimTick();
             ServerPreSimTick();
             preSimDuration = System.Diagnostics.Stopwatch.GetTimestamp() - preSimDuration;
@@ -426,7 +428,9 @@ namespace Prediction
             ServerPostSimTick();
             postSimDuration = System.Diagnostics.Stopwatch.GetTimestamp() - postSimDuration;
             tickDuration = System.Diagnostics.Stopwatch.GetTimestamp() - tickDuration;
-
+            
+            onPostTick.Dispatch(tickId);
+            
             if (LOG_TIMING || DEBUG) {
                 Debug.Log($"[PredictionManager][Tick] t:{tickId} deltaPrevTick:{interTickDuration} td:{tickDuration} pre:{preSimDuration} post:{postSimDuration} sim:{(tickDuration - preSimDuration - postSimDuration)} resim:{(resimulatedThisTick ? "1" : "0")} freq:{System.Diagnostics.Stopwatch.Frequency} shouldResim:{(shouldResimThisTick ? "1" : "0")}");
             }
@@ -592,6 +596,8 @@ namespace Prediction
 
             ticksSinceResim = 0;
             resimulatedThisTick = true;
+            
+            onPreResimTick.Dispatch(startTick);
             //TODO: decide what to do with these hooks...
             PHYSICS_CONTROLLER.BeforeResimulate(null);
             if (maxRewindDistance < rewind)
@@ -612,10 +618,13 @@ namespace Prediction
             }
             //All relevant bodies are now at the end of startTick
             MarkResimulatedTick(startTick);
+            onPostResimTick.Dispatch(startTick);
             
             uint index = startTick + 1;
             while (index < tickId)
             {
+                onPreResimTick.Dispatch(index);
+                
                 foreach (KeyValuePair<uint, ClientPredictedEntity> pair in _clientEntities)
                 {
                     //Note: this will run logic on local authority: fetchInput, loadInput, applyForces
@@ -633,9 +642,10 @@ namespace Prediction
                 }
                 
                 MarkResimulatedTick(index);
+                onPostResimTick.Dispatch(index);
+                
                 index++;
                 totalResimulationSteps++;
-                
             }
             
             totalResimulations++;
@@ -987,6 +997,11 @@ namespace Prediction
         {
             return totalResimulationSteps / tickId;
         }
+
+        public SafeEventDispatcher<uint> onPreTick = new();
+        public SafeEventDispatcher<uint> onPreResimTick = new();
+        public SafeEventDispatcher<uint> onPostTick = new();
+        public SafeEventDispatcher<uint> onPostResimTick = new();
         
         public SafeEventDispatcher<ServerUpdateSendError> onServerStateSendError = new();
         public SafeEventDispatcher<EntityProcessingError> onClientStateSendError = new();
