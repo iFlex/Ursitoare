@@ -51,6 +51,14 @@ namespace Prediction
             SetControlledLocally(false);
         }
 
+        ~PredictedEntityVisuals()
+        {
+            if (!visualsEntity.transform.parent)
+            {
+                Destroy(visualsEntity);
+            }
+        }
+
         void AggregateState(PhysicsStateRecord state)
         {
             //Debug.Log($"[PredictedEntityVisuals]({GetInstanceID()}) state: {state}");

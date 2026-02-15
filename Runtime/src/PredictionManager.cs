@@ -414,8 +414,6 @@ namespace Prediction
 
             preSimDuration = System.Diagnostics.Stopwatch.GetTimestamp();
             tickDuration = preSimDuration;
-
-            onPreTick.Dispatch(tickId);
             
             ClientPreSimTick();
             ServerPreSimTick();
@@ -687,6 +685,8 @@ namespace Prediction
                 {
                     ClientResimulationCheckPass();
                 }
+                onPreTick.Dispatch(tickId);
+                
                 foreach (KeyValuePair<uint, ClientPredictedEntity> pair in _clientEntities)
                 {
                     if (pair.Key == localEntityId)
@@ -769,6 +769,7 @@ namespace Prediction
         {
             if (isServer)
             {
+                onPreTick.Dispatch(tickId);
                 foreach (KeyValuePair<ServerPredictedEntity, uint> pair in _serverEntityToId)
                 {
                     ServerPredictedEntity entity = pair.Key;
