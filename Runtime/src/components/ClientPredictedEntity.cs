@@ -76,9 +76,15 @@ namespace Prediction
         public uint lastSvTickId = 0;
         public uint oldServerTickCount = 0;
         public uint countMissingServerHistory = 0;
+
+        ~ClientPredictedEntity()
+        {
+            Debug.Log($"[ClientPredictedEntity] Destructor");
+        }
         
         public ClientPredictedEntity(uint id, bool isServer, int bufferSize, Rigidbody rb, GameObject visuals, PredictableControllableComponent[] controllablePredictionContributors, PredictableComponent[] predictionContributors) : base(id, rb, visuals, controllablePredictionContributors, predictionContributors)
         {
+            Debug.Log($"[ClientPredictedEntity] Constructor");
             rigidbody = rb;
             gameObject = rb.gameObject;
             detachedVisualsIdentity = visuals;

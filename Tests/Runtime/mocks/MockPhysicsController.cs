@@ -43,6 +43,10 @@ namespace Prediction.Tests.mocks
         public void Untrack(Rigidbody rigidbody)
         {
         }
+
+        public void Clear()
+        {
+        }
     }
 }
 #endif

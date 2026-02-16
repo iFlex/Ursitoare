@@ -459,6 +459,8 @@ namespace Prediction
             _clientEntities.Clear();
             _predictedEntities.Clear();
             _predictedEntitiesGO.Clear();
+            tickResimCounter.Clear();
+            PHYSICS_CONTROLLER.Clear();
         }
 
         int PredictionDecisionToInt(PredictionDecision decision)

@@ -142,5 +142,11 @@ namespace Prediction.Simulation
         {
             worldHistory.Remove(rigidbody);
         }
+
+        public void Clear()
+        {
+            worldHistory.Clear();
+            tickId = 1;
+        }
     }
 }

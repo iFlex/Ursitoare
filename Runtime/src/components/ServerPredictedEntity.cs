@@ -47,9 +47,15 @@ namespace Prediction
         public uint maxClientDelay = 0;
         public uint totalBufferingTicks = 0;
         public uint totalMissingInputTicks = 0;
+
+        ~ServerPredictedEntity()
+        {
+            Debug.Log($"[ServerPredictedEntity] Destructor");
+        }
         
         public ServerPredictedEntity(uint id, int bufferSize, Rigidbody rb, GameObject visuals, PredictableControllableComponent[] controllablePredictionContributors, PredictableComponent[] predictionContributors) : base(id, rb, visuals, controllablePredictionContributors, predictionContributors)
         {
+            Debug.Log($"[ServerPredictedEntity] Constructor");
             gameObject = rb.gameObject;
             inputQueue = new TickIndexedBuffer<PredictionInputRecord>(bufferSize);
             inputQueue.emptyValue = null;

@@ -41,5 +41,9 @@ namespace Prediction.Simulation
         public void Untrack(Rigidbody rigidbody)
         {
         }
+
+        public void Clear()
+        {
+        }
     }
 }

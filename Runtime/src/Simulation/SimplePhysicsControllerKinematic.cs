@@ -76,5 +76,10 @@ namespace Prediction.Simulation
         {
             trackedBodies.Remove(rigidbody);
         }
+
+        public void Clear()
+        {
+            trackedBodies.Clear();
+        }
     }
 }

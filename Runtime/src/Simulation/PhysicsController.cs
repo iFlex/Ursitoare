@@ -12,5 +12,6 @@ namespace Prediction.Simulation
         void AfterResimulate(ClientPredictedEntity entity);
         void Track(Rigidbody rigidbody);
         void Untrack(Rigidbody rigidbody);
+        void Clear();
     }
 }

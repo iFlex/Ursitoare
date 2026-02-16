@@ -51,11 +51,13 @@ namespace Prediction
             SetControlledLocally(false);
         }
 
-        ~PredictedEntityVisuals()
+        public void Destroy(bool ignore)
         {
-            if (!visualsEntity.transform.parent)
+            Debug.Log($"[PredictedEntityVisuals][Destroy]");
+            if (visualsEntity)
             {
-                Destroy(visualsEntity);
+                GameObject.Destroy(visualsEntity);
+                visualsEntity = null;
             }
         }
 
