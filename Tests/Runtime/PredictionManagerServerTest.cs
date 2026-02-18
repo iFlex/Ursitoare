@@ -205,7 +205,7 @@ namespace Prediction.Tests
             Assert.AreEqual(null, manager.GetEntity(1));
             Assert.AreEqual(serverEntity1, manager.GetEntity(3));
             
-            manager.UnsetOwnership(serverEntity1);
+            manager.UnsetOwnership(serverEntity1, 3);
             Assert.AreEqual(-1, manager.GetOwner(serverEntity1));
             Assert.AreEqual(2, manager.GetOwner(serverEntity2));
             Assert.AreEqual(null, manager.GetEntity(3));

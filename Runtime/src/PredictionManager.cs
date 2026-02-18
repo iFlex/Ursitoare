@@ -206,6 +206,14 @@ namespace Prediction
             }
         }
         
+        public void UnsetOwnership(ServerPredictedEntity entity, int ownerId)
+        {
+            if (_entityToOwnerConnId.ContainsKey(entity) && _entityToOwnerConnId[entity] == ownerId)
+            {
+                UnsetOwnership(_entityToOwnerConnId[entity]);
+            }
+        }
+        
         //TODO: unit test
         public void UnsetOwnership(int ownerId)
         {
@@ -313,12 +321,12 @@ namespace Prediction
             _clientEntities.Remove(id);
             if (ent != null)
             {
-                _predictedEntitiesGO.Remove(ent.gameObject);
-                _predictedEntities.Remove(ent.gameObject.GetComponent<PredictedEntity>());
                 if (autoTrackRigidbodies)
                 {
                     PHYSICS_CONTROLLER.Untrack(ent.rigidbody);
                 }
+                _predictedEntitiesGO.Remove(ent.gameObject);
+                _predictedEntities.Remove(ent.gameObject.GetComponent<PredictedEntity>());
             }
             if (id == localEntityId && isClient)
             {
