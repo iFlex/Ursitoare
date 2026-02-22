@@ -8,15 +8,12 @@ namespace Prediction
     //TODO: document in readme
     public class ServerPredictedEntity : AbstractPredictedEntity
     {
-        public static bool DEBUG = false;
         public static bool APPLY_FORCES_TO_EACH_CATCHUP_INPUT = false;
         public static bool USE_BUFFERING = true;
         public static bool BUFFER_ONCE = true;
         public static int BUFFER_FULL_THRESHOLD = 3; //Number of ticks to buffer before starting to send out the updates
         public static bool CATCHUP = true;
         public static bool INCREMENT_TICK_WHEN_NO_INPUT = false;
-        public static bool SERVER_LOG_VELOCITIES = false;
-        public static bool LOG_CLIENT_INUPTS = false;
         public static bool APPLY_OLD_INPUTS_IN_CURRENT_TICK = false;
         
         public GameObject gameObject;
@@ -153,10 +150,11 @@ namespace Prediction
 			if (nextInput == null)
 	            return;
 
-            if (LOG_CLIENT_INUPTS)
-            {
-                Debug.Log($"[SV][SIMULATION][INPUT] i:{id} t:{qTickId} input:{nextInput}");
-            }
+            InputAppliedInfo inputInfo;
+            inputInfo.entityId = id;
+            inputInfo.tickId = qTickId;
+            inputInfo.input = nextInput;
+            onInputApplied.Dispatch(inputInfo);
 
             int delta = (int) (qTickId - lastInputLoadedTick);
             if (ValidateState(TickDeltaToTimeDelta(delta), nextInput))
@@ -174,11 +172,13 @@ namespace Prediction
             }
 		}
 		
-		public static bool LOG_INPUT_QUEUE_SIZE = true;
         public uint ServerSimulationTick()
         {
-			if (LOG_INPUT_QUEUE_SIZE)
-				Debug.Log($"[ServerPredictedEntity][ServerSimulationTick] i:{id} t:{tickId} inputBufferSize:{inputQueue.GetFill()}");
+            InputQueueInfo queueInfo;
+            queueInfo.entityId = id;
+            queueInfo.tickId = tickId;
+            queueInfo.queueSize = inputQueue.GetFill();
+            onInputQueueSize.Dispatch(queueInfo);
             
 			if (CanUseBuffer())
             {
@@ -244,14 +244,15 @@ namespace Prediction
             SampleComponentState(serverStateBfr);
             stateSampled.Dispatch(true);
             
-			if (DEBUG)
-                Debug.Log($"[ServerPredictedEntity][SamplePhysicsState]({id}) input:{serverStateBfr}");
-            
-            if (SERVER_LOG_VELOCITIES)
-            {
-                //TODO: this can be done via events in the host application...
-                Debug.Log($"[SV][SIMULATION][DATA] i:{id} t:{tickId} p:{rigidbody.position.ToString("F10")} r:{rigidbody.rotation.ToString("F10")} v:{rigidbody.linearVelocity.ToString("F10")} a:{rigidbody.angularVelocity.ToString("F10")} input:{serverStateBfr.input}");
-            }
+	            SimulationStateInfo simInfo;
+            simInfo.entityId = id;
+            simInfo.tickId = tickId;
+            simInfo.position = rigidbody.position;
+            simInfo.rotation = rigidbody.rotation;
+            simInfo.velocity = rigidbody.linearVelocity;
+            simInfo.angularVelocity = rigidbody.angularVelocity;
+            simInfo.state = serverStateBfr;
+            onSimulationState.Dispatch(simInfo);
 
 			if (tickShouldUpdate) {
 				tickId++;
@@ -270,8 +271,12 @@ namespace Prediction
         private ClientInput cevt;
         public void BufferClientTick(uint clientTickId, PredictionInputRecord inputRecord)
         {
-            if (DEBUG)
-                Debug.Log($"[ServerPredictedEntity][BufferClientTick]({gameObject.GetInstanceID()}) clientTickId:{clientTickId} tickId:{tickId} input:{inputRecord}");
+            ClientTickBufferedInfo bufferedInfo;
+            bufferedInfo.entityId = id;
+            bufferedInfo.clientTickId = clientTickId;
+            bufferedInfo.serverTickId = tickId;
+            bufferedInfo.inputRecord = inputRecord;
+            onClientTickBuffered.Dispatch(bufferedInfo);
             
             if (inputQueue.GetFill() == 0)
             {
@@ -302,12 +307,9 @@ namespace Prediction
 	
             }
 
-            if (LOG_CLIENT_INUPTS)
-            {
-                cevt.tickId = tickId;
-                cevt.input = inputRecord;
-                inputReceived.Dispatch(cevt);   
-            }
+            cevt.tickId = tickId;
+            cevt.input = inputRecord;
+            inputReceived.Dispatch(cevt);
         }
         
         public void ResetClientState()
@@ -354,8 +356,7 @@ namespace Prediction
         //TODO: decide if to keep?
         void SnapToLatest()
         {
-            if (DEBUG)
-                Debug.Log($"[ServerPredictedEntity][SnapToLatest]({gameObject.GetInstanceID()})");
+            onSnapToLatest.Dispatch(id);
             totalSnapAheadCounter++;
 
             uint tick = inputQueue.GetEndTick();
@@ -392,5 +393,44 @@ namespace Prediction
         public SafeEventDispatcher<DesyncEvent> potentialDesync = new();
         public SafeEventDispatcher<bool> stateSampled = new();
         public SafeEventDispatcher<ClientInput> inputReceived = new();
+
+        public struct InputAppliedInfo
+        {
+            public uint entityId;
+            public uint tickId;
+            public PredictionInputRecord input;
+        }
+        public SafeEventDispatcher<InputAppliedInfo> onInputApplied = new();
+
+        public struct InputQueueInfo
+        {
+            public uint entityId;
+            public uint tickId;
+            public int queueSize;
+        }
+        public SafeEventDispatcher<InputQueueInfo> onInputQueueSize = new();
+
+        public struct SimulationStateInfo
+        {
+            public uint entityId;
+            public uint tickId;
+            public Vector3 position;
+            public Quaternion rotation;
+            public Vector3 velocity;
+            public Vector3 angularVelocity;
+            public PhysicsStateRecord state;
+        }
+        public SafeEventDispatcher<SimulationStateInfo> onSimulationState = new();
+
+        public struct ClientTickBufferedInfo
+        {
+            public uint entityId;
+            public uint clientTickId;
+            public uint serverTickId;
+            public PredictionInputRecord inputRecord;
+        }
+        public SafeEventDispatcher<ClientTickBufferedInfo> onClientTickBuffered = new();
+
+        public SafeEventDispatcher<uint> onSnapToLatest = new();
     }
 }

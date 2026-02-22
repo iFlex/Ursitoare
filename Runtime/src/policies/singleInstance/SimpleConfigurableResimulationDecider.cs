@@ -1,30 +1,27 @@
-﻿using System.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 using Prediction.data;
-using UnityEngine;
+using Sector0.Events;
 
 namespace Prediction.policies.singleInstance
 {
     public class SimpleConfigurableResimulationDecider : SingleSnapshotInstanceResimChecker
     {
-        public static bool LOG_RESIMULATIONS = false;
-        public static bool LOG_ALL_CHECKS    = false;
-        
         public float _avgDistD = 0;
         public float _avgRotD = 0;
         public float _avgVeloD = 0;
         public float _avgAVeloD = 0;
         public int _checkCount = 0;
-        
+
         public float _MaxDistD = 0;
         public float _MaxRotD = 0;
         public float _MaxVeloD = 0;
         public float _MaxAVeloD = 0;
-        
+
         public float distResimThreshold;
         public float rotationResimThreshold;
         public float veloResimThreshold;
         public float angVeloResimThreshold;
-        
+
         public SimpleConfigurableResimulationDecider()
         {
             distResimThreshold = 0.0001f;
@@ -47,97 +44,75 @@ namespace Prediction.policies.singleInstance
             float angD = Quaternion.Angle(local.rotation, server.rotation);
             float vdelta = (local.velocity - server.velocity).magnitude;
             float avdelta = (local.angularVelocity - server.angularVelocity).magnitude;
-            
+
             _avgDistD += distD;
             _avgRotD += angD;
             _avgVeloD += vdelta;
             _avgAVeloD += avdelta;
             _checkCount++;
-            
-            if (_MaxDistD < distD)
+
+            if (_MaxDistD < distD) _MaxDistD = distD;
+            if (_MaxRotD < angD) _MaxRotD = angD;
+            if (_MaxVeloD < vdelta) _MaxVeloD = vdelta;
+            if (_MaxAVeloD < avdelta) _MaxAVeloD = avdelta;
+
+            if (distResimThreshold > 0 && distD > distResimThreshold)
             {
-                _MaxDistD = distD;
-            }
-            if (_MaxRotD < angD)
-            {
-                _MaxRotD = angD;
-            }
-            if (_MaxVeloD < vdelta)
-            {
-                _MaxVeloD = vdelta;
-            }
-            if (_MaxAVeloD < avdelta)
-            {
-                _MaxAVeloD = avdelta;
-            }
-            
-            if (distResimThreshold > 0)
-            {
-                if (distD > distResimThreshold)
-                {
-                    if (LOG_RESIMULATIONS)
-                    {
-                        Log(entityId, tickId, distD, angD, vdelta, avdelta, true);
-                    }
-                    return PredictionDecision.RESIMULATE;
-                }
+                DispatchCheckResult(entityId, tickId, distD, angD, vdelta, avdelta, local, server, true);
+                return PredictionDecision.RESIMULATE;
             }
 
-            if (rotationResimThreshold > 0)
+            if (rotationResimThreshold > 0 && angD > rotationResimThreshold)
             {
-                if (angD > rotationResimThreshold)
-                {
-                    if (LOG_RESIMULATIONS)
-                    {
-                        Log(entityId, tickId, distD, angD, vdelta, avdelta, true);
-                    }
-                    return PredictionDecision.RESIMULATE;
-                }
-            }
-            
-            if (veloResimThreshold > 0)
-            {
-                if (vdelta > veloResimThreshold)
-                {
-                    if (LOG_RESIMULATIONS)
-                    {
-                        Log(entityId, tickId, distD, angD, vdelta, avdelta, true);
-                    }
-                    return PredictionDecision.RESIMULATE;
-                }
-            }
-            
-            if (angVeloResimThreshold > 0)
-            {
-                if (avdelta > angVeloResimThreshold)
-                {
-                    if (LOG_RESIMULATIONS)
-                    {
-                        Log(entityId, tickId, distD, angD, vdelta, avdelta, true);
-                    }
-                    return PredictionDecision.RESIMULATE;
-                }
+                DispatchCheckResult(entityId, tickId, distD, angD, vdelta, avdelta, local, server, true);
+                return PredictionDecision.RESIMULATE;
             }
 
-            if (LOG_ALL_CHECKS)
+            if (veloResimThreshold > 0 && vdelta > veloResimThreshold)
             {
-                Log(entityId, tickId, distD, angD, vdelta, avdelta, false);
-                Debug.Log($"[CHECK][DATA] i:{entityId} t:{tickId} client:{local} server:{server}");
+                DispatchCheckResult(entityId, tickId, distD, angD, vdelta, avdelta, local, server, true);
+                return PredictionDecision.RESIMULATE;
             }
+
+            if (angVeloResimThreshold > 0 && avdelta > angVeloResimThreshold)
+            {
+                DispatchCheckResult(entityId, tickId, distD, angD, vdelta, avdelta, local, server, true);
+                return PredictionDecision.RESIMULATE;
+            }
+
+            DispatchCheckResult(entityId, tickId, distD, angD, vdelta, avdelta, local, server, false);
             return PredictionDecision.NOOP;
         }
-        
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Log(uint entityId, uint tickId, float distD, float angD, float vdelta, float avdelta, bool isResim)
+        void DispatchCheckResult(uint entityId, uint tickId, float distD, float angD, float vdelta, float avdelta, PhysicsStateRecord local, PhysicsStateRecord server, bool isResim)
         {
-            if (isResim)
-            {
-                Debug.Log($"[CHECK][RESIMULATION] i:{entityId}|t:{tickId}|D:{distD.ToString("F10")}|R:{angD.ToString("F10")}|V:{vdelta.ToString("F10")}|AV:{avdelta.ToString("F10")}|");
-            }
-            else
-            {
-                Debug.Log($"[CHECK]______________ i:{entityId}|t:{tickId}|D:{distD.ToString("F10")}|R:{angD.ToString("F10")}|V:{vdelta.ToString("F10")}|AV:{avdelta.ToString("F10")}|");
-            }
+            CheckResultInfo info;
+            info.entityId = entityId;
+            info.tickId = tickId;
+            info.distD = distD;
+            info.angD = angD;
+            info.velocityDelta = vdelta;
+            info.angularVelocityDelta = avdelta;
+            info.localState = local;
+            info.serverState = server;
+            info.isResim = isResim;
+            onCheckResult.Dispatch(info);
         }
+
+        public struct CheckResultInfo
+        {
+            public uint entityId;
+            public uint tickId;
+            public float distD;
+            public float angD;
+            public float velocityDelta;
+            public float angularVelocityDelta;
+            public PhysicsStateRecord localState;
+            public PhysicsStateRecord serverState;
+            public bool isResim;
+        }
+
+        public SafeEventDispatcher<CheckResultInfo> onCheckResult = new();
     }
 }

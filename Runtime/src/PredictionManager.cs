@@ -13,15 +13,12 @@ namespace Prediction
     //TODO: decouple the implementation from Time.fixedDeltaTime, have it be configurable
     public class PredictionManager
     {
-        public static bool DEBUG = false;
-        public static bool LOG_TIMING = false;
         public static bool DO_RESIM = true;
         public static bool DO_SNAP = true;
-        
+
         //TODO: unit test
         public static bool IGNORE_NON_AUTH_RESIM_DECISIONS = false;
         public static bool IGNORE_CONTROLLABLE_FOLLOWER_DECISIONS = true;
-        public static bool LOG_PRE_SIM_STATE = false;
         public static bool PREDICTION_ENABLED = true;
         
         //TODO: guard singleton
@@ -186,7 +183,10 @@ namespace Prediction
             if (entity == null)
                 return;
             
-            Debug.Log($"[PredictionManager][SetEntityOwner] SERVER ({entity.id}) ownerId:{ownerId} entity:{entity}");
+            EntityOwnerSetInfo ownerSetInfo;
+            ownerSetInfo.entityId = entity.id;
+            ownerSetInfo.ownerId = ownerId;
+            onEntityOwnerSet.Dispatch(ownerSetInfo);
             if (_connIdToEntity.GetValueOrDefault(ownerId, null) == entity)
             {
                 //NOOP
@@ -221,7 +221,10 @@ namespace Prediction
                 throw new Exception("INVALID_USE: called SetEntityOwner on non server entity");
             
             ServerPredictedEntity entity = _connIdToEntity.GetValueOrDefault(ownerId, null);
-            Debug.Log($"[PredictionManager][UnsetOwnership] SERVER ownerId:{ownerId} entity:{entity}");
+            EntityOwnerUnsetInfo ownerUnsetInfo;
+            ownerUnsetInfo.ownerId = ownerId;
+            ownerUnsetInfo.entityId = entity != null ? entity.id : 0;
+            onEntityOwnerUnset.Dispatch(ownerUnsetInfo);
             if (entity != null)
             {
                 _connIdToEntity.Remove(ownerId);
@@ -233,7 +236,12 @@ namespace Prediction
                 }
                 catch (Exception e)
                 {
-                    //TODO: event
+                    ServerUpdateSendError err;
+                    err.exception = e;
+                    err.entityId = entity.id;
+                    err.connId = ownerId;
+                    err.tickId = tickId;
+                    onServerStateSendError.Dispatch(err);
                 }
             }
         }
@@ -256,8 +264,8 @@ namespace Prediction
                 return;
             
             uint id = entity.id;
-            Debug.Log($"[PredictionManager][AddPredictedEntity] SERVER ({id})=>({entity})");
-            
+            onServerEntityAdded.Dispatch(id);
+
             _serverEntityToId[entity] = id;
             _idToServerEntity[id] = entity;
             _predictedEntitiesGO.Add(entity.gameObject);
@@ -275,8 +283,8 @@ namespace Prediction
                 return;
 
             uint id = entity.id;
-            Debug.Log($"[PredictionManager][AddPredictedEntity] CLIENT ({id})=>({entity})");
-            
+            onClientEntityAdded.Dispatch(id);
+
             _clientEntities[id] = entity;
             _predictedEntitiesGO.Add(entity.gameObject);
             _predictedEntities.Add(entity.gameObject.GetComponent<PredictedEntity>());
@@ -309,13 +317,12 @@ namespace Prediction
             {
                 _worldStateRecord.Resize(_serverEntityToId.Count);
             }
-            Debug.Log($"[PredictionManager][RemovePredictedEntity] entity:{entity}");
+            onEntityRemoved.Dispatch(entity.id);
         }
 
         public void RemovePredictedEntity(uint id)
         {
-            if (DEBUG)
-                Debug.Log($"[PredictionManager][RemovePredictedEntity]({id})");
+            onEntityRemoved.Dispatch(id);
             
             ClientPredictedEntity ent = _clientEntities.GetValueOrDefault(id, null);
             _clientEntities.Remove(id);
@@ -353,8 +360,7 @@ namespace Prediction
             if (!isClient)
                 throw new Exception($"INVALID_USAGE: called SetLocalEntity on non client instance!");
             
-            if (DEBUG)
-                Debug.Log($"[PredictionManager][SetLocalEntity]({id})");
+            onLocalEntityChanged.Dispatch(new LocalEntityInfo { entityId = id, set = true });
 
             if (localEntityId == id)
                 return;
@@ -447,9 +453,15 @@ namespace Prediction
             
             onPostTick.Dispatch(tickId);
             
-            if (LOG_TIMING || DEBUG) {
-                Debug.Log($"[PredictionManager][Tick] t:{tickId} deltaPrevTick:{interTickDuration} td:{tickDuration} pre:{preSimDuration} post:{postSimDuration} sim:{(tickDuration - preSimDuration - postSimDuration)} resim:{(resimulatedThisTick ? "1" : "0")} freq:{System.Diagnostics.Stopwatch.Frequency} shouldResim:{(shouldResimThisTick ? "1" : "0")}");
-            }
+            TickTimingInfo timingInfo;
+            timingInfo.tickId = tickId;
+            timingInfo.interTickDuration = interTickDuration;
+            timingInfo.tickDuration = tickDuration;
+            timingInfo.preSimDuration = preSimDuration;
+            timingInfo.postSimDuration = postSimDuration;
+            timingInfo.resimulated = resimulatedThisTick;
+            timingInfo.shouldResim = shouldResimThisTick;
+            onTickTiming.Dispatch(timingInfo);
             tickId++;
         }
 
@@ -499,7 +511,6 @@ namespace Prediction
         }
         
         //TODO: package private
-        //TODO: ability to only resimulate for locally controlled object
         public PredictionDecision ComputePredictionDecision(out uint resimFromTickId)
         {
             int decisionCode = 0;
@@ -585,7 +596,6 @@ namespace Prediction
         
         //TODO: unit test this!!!
         public bool resimUseAvailableServerTicks = true;
-        public bool correctWholeWorldWhenResimulating = true;
         public uint resimSkipNotEnoughHistory = 0;
         public bool resimulating = false;
         public uint maxRewindDistance = 0;
@@ -598,7 +608,10 @@ namespace Prediction
             if (tickId <= startTick)
             {
                 //NOTE: this shouldn't be possible
-                Debug.Log($"[PredictionManager][Resimulate] tickId:{tickId} startTick:{startTick}. Are you misusing the system? startTick cannot be larger or equal than the current tickId");
+                ResimTickRangeInvalid rangeInvalid;
+                rangeInvalid.tickId = tickId;
+                rangeInvalid.startTick = startTick;
+                onResimTickRangeInvalid.Dispatch(rangeInvalid);
                 resimSkipNotEnoughHistory++;
                 return;
             }
@@ -615,8 +628,7 @@ namespace Prediction
             ticksSinceResim = 0;
             resimulatedThisTick = true;
             
-            //TODO: decide what to do with these hooks...
-            PHYSICS_CONTROLLER.BeforeResimulate(null);
+            PHYSICS_CONTROLLER.BeforeResimulate();
             if (maxRewindDistance < rewind)
             {
                 maxRewindDistance = rewind;
@@ -627,11 +639,9 @@ namespace Prediction
             //Snap to correct state reported by server for all relevant objects
             foreach (KeyValuePair<uint, ClientPredictedEntity> pair in _clientEntities)
             {
-                if (correctWholeWorldWhenResimulating || pair.Value.GetPredictionDecision(tickId, out uint localFromTick) == PredictionDecision.RESIMULATE)
-                {
-                    pair.Value.SnapToServer(startTick);
-                    pair.Value.PostResimulationStep(startTick);
-                }
+                PHYSICS_CONTROLLER.BeforeResimulate(pair.Value);
+                pair.Value.SnapToServer(startTick);
+                pair.Value.PostResimulationStep(startTick);
             }
             //All relevant bodies are now at the end of startTick
             MarkResimulatedTick(startTick);
@@ -647,7 +657,9 @@ namespace Prediction
                     //Note: this will run logic on local authority: fetchInput, loadInput, applyForces
                     pair.Value.PreResimulationStep(index);
                 }
+                
                 PHYSICS_CONTROLLER.Resimulate(null);
+                
                 foreach (KeyValuePair<uint, ClientPredictedEntity> pair in _clientEntities)
                 {
                     if (resimUseAvailableServerTicks)
@@ -667,7 +679,12 @@ namespace Prediction
             
             totalResimulations++;
             resimulation.Dispatch(false);
-            PHYSICS_CONTROLLER.AfterResimulate(null);
+            
+            foreach (KeyValuePair<uint, ClientPredictedEntity> pair in _clientEntities)
+            {
+                PHYSICS_CONTROLLER.AfterResimulate(pair.Value);
+            }
+            PHYSICS_CONTROLLER.AfterResimulate();
             resimulating = false;
         }
         
@@ -705,9 +722,11 @@ namespace Prediction
                 {
                     if (pair.Key == localEntityId)
                     {
-                        if (DEBUG)
-                            Debug.Log($"[PredictionManager][ClientPreSimTick] Client:{pair.Value} tick:{tickId}");
-                        
+                        ClientPreSimTickInfo preSimInfo;
+                        preSimInfo.entityId = pair.Value.id;
+                        preSimInfo.tickId = tickId;
+                        onClientPreSimTick.Dispatch(preSimInfo);
+
                         PredictionInputRecord tickInputRecord;
                         if (PREDICTION_ENABLED || isServer)
                         {
@@ -722,8 +741,11 @@ namespace Prediction
                         {
                             try
                             {
-                                if (DEBUG)
-                                    Debug.Log($"[PredictionManager][ClientPreSimTick][SEND] (id:{pair.Value.id}) tick:{tickId} data:{tickInputRecord} sndr:{clientStateSender}");
+                                ClientStateSentInfo sentInfo;
+                                sentInfo.entityId = pair.Value.id;
+                                sentInfo.tickId = tickId;
+                                sentInfo.inputRecord = tickInputRecord;
+                                onClientStateSent.Dispatch(sentInfo);
                                 clientStateSender?.Invoke(tickId, tickInputRecord);
                             }
                             catch (Exception e)
@@ -742,10 +764,12 @@ namespace Prediction
                         pair.Value.ClientFollowerSimulationTick(tickId);
                     }
 
-                    if (LOG_PRE_SIM_STATE)
-                    {
-                        Debug.Log($"[CL][PRESIMULATION][DATA] i:{pair.Key} t:{tickId} p:{pair.Value.rigidbody.position.ToString("F10")} r:{pair.Value.rigidbody.rotation.ToString("F10")}");
-                    }
+                    PreSimStateInfo clPreSimInfo;
+                    clPreSimInfo.entityId = pair.Key;
+                    clPreSimInfo.tickId = tickId;
+                    clPreSimInfo.position = pair.Value.rigidbody.position;
+                    clPreSimInfo.rotation = pair.Value.rigidbody.rotation;
+                    onPreSimState.Dispatch(clPreSimInfo);
                 }
 
                 if (localEntity == null)
@@ -764,7 +788,10 @@ namespace Prediction
             catch (Exception e)
             {
                 clientSendErrors++;
-                //TODO: event?
+                EntityProcessingError err;
+                err.exception = e;
+                err.entityId = 0;
+                onClientStateSendError.Dispatch(err);
             }   
         }
 
@@ -814,8 +841,10 @@ namespace Prediction
                 {
                     state.input = localEntity.GetLastInput();
                 }
-                if (DEBUG)
-                    Debug.Log($"[PredictionManager][ServerPostSimTick] id:{id} update:{state}");
+                ServerPostSimInfo postSimInfo;
+                postSimInfo.entityId = id;
+                postSimInfo.state = state;
+                onServerPostSimState.Dispatch(postSimInfo);
                 
                 if (useServerWorldStateMessage)
                 {
@@ -841,10 +870,12 @@ namespace Prediction
             int connId = _entityToOwnerConnId[entity];
             _connIdToLatestTick[connId] = tid;
             
-            if (LOG_PRE_SIM_STATE)
-            {
-                Debug.Log($"[SV][PRESIMULATION][DATA] i:{entity.id} t:{tickId} p:{entity.rigidbody.position.ToString("F10")} r:{entity.rigidbody.rotation.ToString("F10")}");
-            }
+            PreSimStateInfo svPreSimInfo;
+            svPreSimInfo.entityId = entity.id;
+            svPreSimInfo.tickId = tickId;
+            svPreSimInfo.position = entity.rigidbody.position;
+            svPreSimInfo.rotation = entity.rigidbody.rotation;
+            onPreSimState.Dispatch(svPreSimInfo);
         }
         
         //FODO: performance
@@ -860,8 +891,7 @@ namespace Prediction
         
         public void OnServerWorldStateReceived(WorldStateRecord wsr)
         {
-            if (DEBUG)
-                Debug.Log($"[PredictionManager][OnServerWorldStateReceived] WorldState:{wsr}]");
+            onWorldStateReceivedInfo.Dispatch(wsr);
             
             if (isClient && !isServer)
             {
@@ -878,8 +908,10 @@ namespace Prediction
             if (!isClient)
                 return;
             
-            if (DEBUG)
-                Debug.Log($"[PredictionManager][OnServerStateReceived] entityId:{entityId} stateRecord:{stateRecord}");
+            ServerStateReceivedInfo srInfo;
+            srInfo.entityId = entityId;
+            srInfo.stateRecord = stateRecord;
+            onServerStateReceivedInfo.Dispatch(srInfo);
             
             ClientPredictedEntity entity = _clientEntities.GetValueOrDefault(entityId, null);
             if (entity != null && (entityId == localEntityId || (isClient && !isServer)))
@@ -892,8 +924,10 @@ namespace Prediction
         {
             if (!isClient)
                 throw new Exception("COMPONENT_MISUSE: OnEntityOwnershipChanged called on non client entity");
-            if (DEBUG)
-                Debug.Log($"[PredictionManager][OnEntityOwnershipChanged] entityId:{entityId} owned:{owned}");
+            EntityOwnershipChangedInfo eocInfo;
+            eocInfo.entityId = entityId;
+            eocInfo.owned = owned;
+            onEntityOwnershipChangedInfo.Dispatch(eocInfo);
 
             if (owned)
             {
@@ -915,8 +949,11 @@ namespace Prediction
                 clientStatesReceived++;
             
             ServerPredictedEntity entity = _connIdToEntity.GetValueOrDefault(connId);
-            if (DEBUG)
-                Debug.Log($"[PredictionManager][OnClientStateReceiver] connId:{connId} clientTickId:{clientTickId} tickInputRecord:{tickInputRecord} ENTITY:{entity}");
+            ClientStateReceivedInfo csrInfo;
+            csrInfo.connId = connId;
+            csrInfo.clientTickId = clientTickId;
+            csrInfo.inputRecord = tickInputRecord;
+            onClientStateReceivedInfo.Dispatch(csrInfo);
             entity?.BufferClientTick(clientTickId, tickInputRecord);
         }
 
@@ -1015,10 +1052,66 @@ namespace Prediction
         public SafeEventDispatcher<uint> onPreResimTick = new();
         public SafeEventDispatcher<uint> onPostTick = new();
         public SafeEventDispatcher<uint> onPostResimTick = new();
-        
+
         public SafeEventDispatcher<ServerUpdateSendError> onServerStateSendError = new();
         public SafeEventDispatcher<EntityProcessingError> onClientStateSendError = new();
         public SafeEventDispatcher<bool> resimulation = new();
         public SafeEventDispatcher<bool> resimulationStep = new();
+
+        // ── Diagnostic events ────────────────────────────────────────────────
+
+        public struct SetupInfo { public bool isServer; public bool isClient; }
+        public SafeEventDispatcher<SetupInfo> onSetup = new();
+
+        public struct EntityOwnerSetInfo { public uint entityId; public int ownerId; }
+        public SafeEventDispatcher<EntityOwnerSetInfo> onEntityOwnerSet = new();
+
+        public struct EntityOwnerUnsetInfo { public uint entityId; public int ownerId; }
+        public SafeEventDispatcher<EntityOwnerUnsetInfo> onEntityOwnerUnset = new();
+
+        public SafeEventDispatcher<uint> onServerEntityAdded = new();
+        public SafeEventDispatcher<uint> onClientEntityAdded = new();
+        public SafeEventDispatcher<uint> onEntityRemoved = new();
+
+        public struct LocalEntityInfo { public uint entityId; public bool set; }
+        public SafeEventDispatcher<LocalEntityInfo> onLocalEntityChanged = new();
+
+        public struct TickTimingInfo
+        {
+            public uint tickId;
+            public long interTickDuration;
+            public long tickDuration;
+            public long preSimDuration;
+            public long postSimDuration;
+            public bool resimulated;
+            public bool shouldResim;
+        }
+        public SafeEventDispatcher<TickTimingInfo> onTickTiming = new();
+
+        public struct ResimTickRangeInvalid { public uint tickId; public uint startTick; }
+        public SafeEventDispatcher<ResimTickRangeInvalid> onResimTickRangeInvalid = new();
+
+        public struct ClientPreSimTickInfo { public uint entityId; public uint tickId; }
+        public SafeEventDispatcher<ClientPreSimTickInfo> onClientPreSimTick = new();
+
+        public struct ClientStateSentInfo { public uint entityId; public uint tickId; public PredictionInputRecord inputRecord; }
+        public SafeEventDispatcher<ClientStateSentInfo> onClientStateSent = new();
+
+        public struct PreSimStateInfo { public uint entityId; public uint tickId; public Vector3 position; public Quaternion rotation; }
+        public SafeEventDispatcher<PreSimStateInfo> onPreSimState = new();
+
+        public struct ServerPostSimInfo { public uint entityId; public PhysicsStateRecord state; }
+        public SafeEventDispatcher<ServerPostSimInfo> onServerPostSimState = new();
+
+        public SafeEventDispatcher<WorldStateRecord> onWorldStateReceivedInfo = new();
+
+        public struct ServerStateReceivedInfo { public uint entityId; public PhysicsStateRecord stateRecord; }
+        public SafeEventDispatcher<ServerStateReceivedInfo> onServerStateReceivedInfo = new();
+
+        public struct EntityOwnershipChangedInfo { public uint entityId; public bool owned; }
+        public SafeEventDispatcher<EntityOwnershipChangedInfo> onEntityOwnershipChangedInfo = new();
+
+        public struct ClientStateReceivedInfo { public int connId; public uint clientTickId; public PredictionInputRecord inputRecord; }
+        public SafeEventDispatcher<ClientStateReceivedInfo> onClientStateReceivedInfo = new();
     }
 }

@@ -19,6 +19,10 @@ namespace Prediction.Tests.mocks
         {
         }
 
+        public void BeforeResimulate()
+        {
+        }
+
         public void BeforeResimulate(ClientPredictedEntity entity)
         {
         }
@@ -29,6 +33,10 @@ namespace Prediction.Tests.mocks
         }
 
         public void Resimulate(ClientPredictedEntity entity)
+        {
+        }
+
+        public void AfterResimulate()
         {
         }
 
