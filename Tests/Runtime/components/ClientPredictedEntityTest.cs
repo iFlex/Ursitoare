@@ -304,6 +304,70 @@ namespace Prediction.Tests
         }
         
         //TODO: test larger packet drop? test repeated package?
+
+        // ---- SIMULATION_FREEZE tests ----
+        // Buffer size is 20 (SetUp). After simulating 25 ticks:
+        //   localHistoryEndTickId = 25, localHistoryStartTickId = 25 - 20 = 5.
+        // IsTickOutsideOfLocalHistory(fromId) = (fromId <= localHistoryStartTickId).
+
+        void SimulateTicksToOverflowHistory(uint tickCount)
+        {
+            for (uint tickId = 1; tickId <= tickCount; tickId++)
+            {
+                entity.ClientSimulationTick(tickId);
+                entity.SamplePhysicsState(tickId);
+            }
+        }
+
+        PhysicsStateRecord MakeServerState(uint tickId)
+        {
+            PhysicsStateRecord state = PhysicsStateRecord.Alloc();
+            state.From(rigidbody);
+            state.tickId = tickId;
+            return state;
+        }
+
+        [Test]
+        public void TestSimulationFreezeAtExactHistoryBoundary()
+        {
+            // After 25 ticks with buffer 20: localHistoryStartTickId = 5.
+            // Server tick 5: IsTickOutsideOfLocalHistory(5) = (5 <= 5) = true → SIMULATION_FREEZE.
+            SimulateTicksToOverflowHistory(25);
+            entity.BufferServerTick(25, MakeServerState(5));
+
+            PredictionDecision decision = entity.GetPredictionDecision(26, out uint fromTick);
+
+            Assert.AreEqual(PredictionDecision.SIMULATION_FREEZE, decision);
+            Assert.AreEqual(5u, fromTick);
+        }
+
+        [Test]
+        public void TestSimulationFreezeWhenServerTickWellBelowHistoryBoundary()
+        {
+            // After 25 ticks: localHistoryStartTickId = 5.
+            // Server tick 1: (1 <= 5) = true → SIMULATION_FREEZE.
+            SimulateTicksToOverflowHistory(25);
+            entity.BufferServerTick(25, MakeServerState(1));
+
+            PredictionDecision decision = entity.GetPredictionDecision(26, out uint fromTick);
+
+            Assert.AreEqual(PredictionDecision.SIMULATION_FREEZE, decision);
+            Assert.AreEqual(1u, fromTick);
+        }
+
+        [Test]
+        public void TestNoSimulationFreezeWhenServerTickJustInsideLocalHistory()
+        {
+            // After 25 ticks: localHistoryStartTickId = 5.
+            // Server tick 6: (6 <= 5) = false → eligibility check runs, not a freeze.
+            SimulateTicksToOverflowHistory(25);
+            entity.BufferServerTick(25, MakeServerState(6));
+
+            PredictionDecision decision = entity.GetPredictionDecision(26, out uint fromTick);
+
+            Assert.AreNotEqual(PredictionDecision.SIMULATION_FREEZE, decision);
+            Assert.AreEqual(6u, fromTick);
+        }
     }
 }
 #endif

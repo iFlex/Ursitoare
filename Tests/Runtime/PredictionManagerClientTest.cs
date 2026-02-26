@@ -310,6 +310,137 @@ namespace Prediction.Tests
         
         //TODO: test resimulation with rewind and exact positions checked as well as exact number of steps applied checked
         //TODO: test SetLocalEntity changes
+
+        // ---- SIMULATION_FREEZE tests ----
+
+        MockClientPredictedEntity MakeMockFollower(uint id)
+        {
+            return new MockClientPredictedEntity(id, false, 20, rigidbody, test,
+                new PredictableControllableComponent[0], new PredictableComponent[0]);
+        }
+
+        [Test]
+        public void TestComputePredictionDecisionSimulationFreezePrecedence()
+        {
+            MockClientPredictedEntity mock1 = MakeMockFollower(0);
+            MockClientPredictedEntity mock2 = MakeMockFollower(1);
+            MockClientPredictedEntity mock3 = MakeMockFollower(2);
+            mock1._fromTick = 1;
+            mock2._fromTick = 2;
+            mock3._fromTick = 3;
+            manager.AddPredictedEntity(mock1);
+            manager.AddPredictedEntity(mock2);
+            manager.AddPredictedEntity(mock3);
+
+            // SIMULATION_FREEZE beats RESIMULATE
+            mock1._predictionDecision = PredictionDecision.NOOP;
+            mock2._predictionDecision = PredictionDecision.RESIMULATE;
+            mock3._predictionDecision = PredictionDecision.SIMULATION_FREEZE;
+            Assert.AreEqual(PredictionDecision.SIMULATION_FREEZE,
+                manager.ComputePredictionDecision(out uint ignoreA));
+
+            // SIMULATION_FREEZE beats SNAP
+            mock2._predictionDecision = PredictionDecision.SNAP;
+            Assert.AreEqual(PredictionDecision.SIMULATION_FREEZE,
+                manager.ComputePredictionDecision(out uint ignoreB));
+
+            // Removing SIMULATION_FREEZE → decision reverts to highest remaining
+            mock3._predictionDecision = PredictionDecision.NOOP;
+            Assert.AreNotEqual(PredictionDecision.SIMULATION_FREEZE,
+                manager.ComputePredictionDecision(out uint ignoreC));
+        }
+
+        [Test]
+        public void TestTickFrozenAndTickIdDoesNotIncrementOnSimulationFreeze()
+        {
+            MockClientPredictedEntity mock1 = MakeMockFollower(1);
+            mock1._predictionDecision = PredictionDecision.SIMULATION_FREEZE;
+            mock1._fromTick = 5;
+            manager.AddPredictedEntity(mock1);
+
+            uint initialTickId = manager.tickId;
+            manager.Tick();
+
+            Assert.AreEqual(initialTickId, manager.tickId,
+                "TickId must not advance while the tick is frozen.");
+            Assert.AreEqual(1u, manager.totalTickFreezes);
+
+            // Consecutive frozen ticks keep tickId frozen and accumulate the counter.
+            manager.Tick();
+            manager.Tick();
+            Assert.AreEqual(initialTickId, manager.tickId);
+            Assert.AreEqual(3u, manager.totalTickFreezes);
+        }
+
+        [Test]
+        public void TestNormalTickNotFrozenOnNoopDecision()
+        {
+            MockClientPredictedEntity mock1 = MakeMockFollower(1);
+            mock1._predictionDecision = PredictionDecision.NOOP;
+            manager.AddPredictedEntity(mock1);
+
+            uint initialTickId = manager.tickId;
+            manager.Tick();
+
+            Assert.AreEqual(initialTickId + 1, manager.tickId,
+                "TickId must advance on a normal (non-frozen) tick.");
+            Assert.AreEqual(0u, manager.totalTickFreezes);
+        }
+
+        [Test]
+        public void TestSimulationFreezeWithRealEntityAfterHistoryOverflow()
+        {
+            const int bufferSize = 20;
+            MockClientPredictedEntity mock1 = new MockClientPredictedEntity(1, false, bufferSize, rigidbody, test,
+                new[] {component}, new[] {component});
+            mock1.SetControlledLocally(true);
+            mock1.SetSingleStateEligibilityCheckHandler(resimDecider.Check);
+            mock1.decisionPassThrough = true;
+
+            manager.AddPredictedEntity(mock1);
+            manager.OnEntityOwnershipChanged(1, true);
+
+            // Run 25 normal ticks (no server state → NOOP each tick).
+            // After tick 25: localHistoryEndTickId = 25, localHistoryStartTickId = 25 - 20 = 5.
+            for (uint tick = 1; tick <= 25; tick++)
+            {
+                component.inputVector = Vector3.zero;
+                manager.Tick();
+            }
+            Assert.AreEqual(26u, manager.tickId);
+
+            // Server reports a state from tick 5 — exactly at the history boundary.
+            PhysicsStateRecord oldState = PhysicsStateRecord.Alloc();
+            oldState.From(rigidbody);
+            oldState.tickId = 5;
+            manager.OnServerStateReceived(1, oldState);
+
+            uint frozenAt = manager.tickId; // 26
+            manager.Tick();
+
+            Assert.AreEqual(frozenAt, manager.tickId,
+                "TickId must not advance while tick is frozen.");
+            Assert.AreEqual(1u, manager.totalTickFreezes);
+
+            // Two more frozen ticks while server state is still outside history.
+            manager.Tick();
+            manager.Tick();
+            Assert.AreEqual(frozenAt, manager.tickId);
+            Assert.AreEqual(3u, manager.totalTickFreezes);
+
+            // Server now reports a state from tick 6 — just inside the history window.
+            // localHistoryStartTickId is still 5, so (6 <= 5) = false → no freeze.
+            PhysicsStateRecord newerState = PhysicsStateRecord.Alloc();
+            newerState.From(rigidbody);
+            newerState.tickId = 6;
+            manager.OnServerStateReceived(1, newerState);
+
+            manager.Tick(); // should thaw and advance normally
+            Assert.AreEqual(frozenAt + 1, manager.tickId,
+                "TickId should resume incrementing once the freeze is resolved.");
+            Assert.AreEqual(3u, manager.totalTickFreezes,
+                "No new freeze should occur after the freeze resolves.");
+        }
     }
 }
 #endif

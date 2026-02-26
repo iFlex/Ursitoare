@@ -57,6 +57,9 @@ namespace Prediction
         private uint lastAppliedFollowerTick = 0;
         public uint lastCheckedServerTickId = 0;
         public uint lastTick = 0;
+        private uint localHistoryEndTickId = 0;
+        private uint localHistoryStartTickId = 0;
+        
         private Dictionary<uint, uint> tickResimCounter = new Dictionary<uint, uint>();
         private bool isCurrentStateSpeculative = false;
         private PhysicsStateRecord prevResimState;
@@ -242,6 +245,19 @@ namespace Prediction
         
         public void SamplePhysicsState(uint tickId)
         {
+            if (tickId > localHistoryEndTickId)
+            {
+                localHistoryEndTickId = tickId;
+                if (localHistoryEndTickId < localStateBuffer.GetCapacity())
+                {
+                    localHistoryStartTickId = 0;
+                }
+                else
+                {
+                    localHistoryStartTickId = localHistoryEndTickId - (uint)localStateBuffer.GetCapacity();
+                }
+            }
+            
             preSampleState.Dispatch(true);
             //TODO: correctly convert tick to index!
             PhysicsStateRecord stateData = localStateBuffer.Get((int)tickId);
@@ -306,18 +322,29 @@ namespace Prediction
             if (TRUST_ALREADY_RESIMULATED_TICKS && tickResimCounter.GetValueOrDefault(fromTick, 0u) > 1)
             {
                 //TODO: toggle this log
-                Debug.Log($"[RESIMULATION][SKIP_CHECK] i:{id} t:{lastAppliedTick} st:{serverState.tickId}");
+                Debug.Log($"[RESIMULATION][SKIP_CHECK] i:{id} t:{lastAppliedTick} st:{fromTick}");
                 return PredictionDecision.NOOP;
             }
             
-            if (serverState.tickId > lastCheckedServerTickId && (serverState.tickId - lastCheckedServerTickId) > 1)
+            if (fromTick > lastCheckedServerTickId && (fromTick - lastCheckedServerTickId) > 1)
             {
                 devt.reason = DesyncReason.GAP_IN_SERVER_STREAM;
                 devt.tickId = lastAppliedTick;
-                devt.gapSize = serverState.tickId - lastCheckedServerTickId;
+                devt.gapSize = fromTick - lastCheckedServerTickId;
                 potentialDesync.Dispatch(devt);
             }
-            return resimulationEligibilityCheckHook(id, serverState.tickId, localStateBuffer, serverStateBuffer);
+
+            if (IsTickOutsideOfLocalHistory(fromTick))
+            {
+                return PredictionDecision.SIMULATION_FREEZE;
+            }
+            return resimulationEligibilityCheckHook(id, fromTick, localStateBuffer, serverStateBuffer);
+        }
+
+        bool IsTickOutsideOfLocalHistory(uint fromId)
+        {
+            //Check if the intended rewind target is outside of the stored history
+            return fromId <= localHistoryStartTickId;
         }
         
         bool AddServerState(uint lastAppliedTick, PhysicsStateRecord serverRecord)
@@ -469,6 +496,8 @@ namespace Prediction
             resimTicksOverbudget = 0;
             lastTick = 0;
             lastCheckedServerTickId = 0;
+            localHistoryStartTickId = 0;
+            localHistoryEndTickId = 0;
             
             localInputBuffer.Clear();
             localStateBuffer.Clear();

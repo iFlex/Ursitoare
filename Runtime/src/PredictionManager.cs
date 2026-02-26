@@ -83,6 +83,7 @@ namespace Prediction
         public uint totalResimulationsDueToBoth = 0;
         
         public uint totalResimulations = 0;
+        public uint totalTickFreezes = 0;
         public uint totalResimulationSteps = 0;
         public uint totalDesyncToSnapCount = 0;
         
@@ -428,7 +429,13 @@ namespace Prediction
                 //Uses latest update for each follower
                 if (PREDICTION_ENABLED)
                 {
-                    ClientResimulationCheckPass();
+                    if (ClientResimulationCheckPass())
+                    {
+                        //NOTE: skip this tick as the local history is too far forwards compared to the resimulation tick needed.
+                        //TODO: find a way to slow down simulation if the history starts to drift forward compared to the last server reported tick.
+                        onTickFrozen.Dispatch(tickId);
+                        return;
+                    }
                 }
             }
             onPreTick.Dispatch(tickId);
@@ -478,6 +485,7 @@ namespace Prediction
                 case PredictionDecision.NOOP: return 0;
                 case PredictionDecision.SNAP: return 1;
                 case PredictionDecision.RESIMULATE: return 2;
+                case PredictionDecision.SIMULATION_FREEZE: return 3;
             }
             return 0;
         }
@@ -488,6 +496,7 @@ namespace Prediction
             {
                 case 1: return PredictionDecision.SNAP;
                 case 2: return PredictionDecision.RESIMULATE;
+                case 3: return PredictionDecision.SIMULATION_FREEZE;
             }
             return PredictionDecision.NOOP;
         }
@@ -525,7 +534,6 @@ namespace Prediction
                 }
                 if (decision == PredictionDecision.RESIMULATE)
                 {
-                    totalResimulationDecisions++;
                     if (pair.Value == localEntity)
                     {
                         localAsksResimulation = true;
@@ -533,7 +541,16 @@ namespace Prediction
                     resimFromTickId = Math.Min(resimFromTickId, localFromTick);
                 }
             }
-            
+
+            PredictionDecision finalDecision = IntToPredictionDecision(decisionCode);
+            if (finalDecision == PredictionDecision.SIMULATION_FREEZE)
+            {
+                totalTickFreezes++;
+            }
+            if (finalDecision == PredictionDecision.RESIMULATE)
+            {
+                totalResimulationDecisions++;
+            }
             if (totalResimulationDecisions == 1 && localAsksResimulation)
             {
                 totalResimulationsDueToAuthority++;
@@ -546,11 +563,11 @@ namespace Prediction
             {
                 totalResimulationsDueToFollowers++;
             }
-            
-            return IntToPredictionDecision(decisionCode);
+            return finalDecision;
         }
-
-        void ClientResimulationCheckPass()
+        
+        //NOTE: returns if the simulation should be skipped for this tick.
+        bool ClientResimulationCheckPass()
         {
             if (isClient && !isServer)
             {
@@ -569,9 +586,6 @@ namespace Prediction
                 
                 switch (decision)
                 {
-                    case PredictionDecision.NOOP:
-                        break;
-                    
                     case PredictionDecision.RESIMULATE:
                         Resimulate(fromTick);
                         break;
@@ -580,7 +594,10 @@ namespace Prediction
                         Snap();
                         break;
                 }
+
+                return decision == PredictionDecision.SIMULATION_FREEZE;
             }
+            return false;
         }
         
         //TODO: unit test this!!!
@@ -1020,5 +1037,6 @@ namespace Prediction
         public SafeEventDispatcher<EntityProcessingError> onClientStateSendError = new();
         public SafeEventDispatcher<bool> resimulation = new();
         public SafeEventDispatcher<bool> resimulationStep = new();
+        public SafeEventDispatcher<uint> onTickFrozen = new();
     }
 }
