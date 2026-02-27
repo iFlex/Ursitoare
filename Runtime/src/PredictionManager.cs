@@ -245,7 +245,7 @@ namespace Prediction
         //TODO: unit test
         void SetOwnership(ServerPredictedEntity entity, int ownerId)
         {
-            if (entity == null)
+            if (entity == null || ownerId == INVALID_CONNECTION_ID)
                 return;
             
             _entityToOwnerConnId[entity] = ownerId;
@@ -297,7 +297,7 @@ namespace Prediction
             if (entity == null)
                 return;
             
-            SetEntityOwner(entity, 0);
+            SetEntityOwner(entity, INVALID_CONNECTION_ID);
             if (_serverEntityToId.ContainsKey(entity))
             {
                 uint id = _serverEntityToId[entity];
