@@ -339,14 +339,14 @@ namespace Prediction
                 potentialDesync.Dispatch(devt);
             }
 
-            if (isControlledLocally && IsTickOutsideOfLocalHistory(serverState.tickId, lastAppliedTick))
+            if (isControlledLocally && IsFromTickBeforeLocalHistory(serverState.tickId, lastAppliedTick))
             {
                 return PredictionDecision.SIMULATION_FREEZE;
             }
             return resimulationEligibilityCheckHook(id, serverState.tickId, localStateBuffer, serverStateBuffer);
         }
 
-        bool IsTickOutsideOfLocalHistory(uint fromId, uint ltid)
+        bool IsFromTickBeforeLocalHistory(uint fromId, uint ltid)
         {
             //Check if the intended rewind target is outside of the stored history
             if (DEBUG)
