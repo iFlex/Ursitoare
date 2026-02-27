@@ -23,6 +23,7 @@ namespace Prediction
         public static bool IGNORE_CONTROLLABLE_FOLLOWER_DECISIONS = true;
         public static bool LOG_PRE_SIM_STATE = false;
         public static bool PREDICTION_ENABLED = true;
+        public static int INVALID_CONNECTION_ID = -1;
         
         //TODO: guard singleton
         public static PredictionManager Instance;
@@ -56,7 +57,7 @@ namespace Prediction
         private bool setup = false;
         public bool autoTrackRigidbodies = true;
         public bool useServerWorldStateMessage = false;
-
+        
         //NOTE: heartbeats are only sent when no predicted entity is controlled locally
         //         tickId
         public Action<uint>                       clientHeartbeadSender;
@@ -77,7 +78,9 @@ namespace Prediction
         public bool protectFromOversimulation = true;
         public uint maxTickResimulationCount = 1;
         private Dictionary<uint, uint> tickResimCounter = new Dictionary<uint, uint>();
-
+        
+        private bool skipSimulationThisTick = false;
+        
         public uint totalResimulationsDueToAuthority = 0;
         public uint totalResimulationsDueToFollowers = 0;
         public uint totalResimulationsDueToBoth = 0;
@@ -170,7 +173,7 @@ namespace Prediction
 
         public int GetOwner(ServerPredictedEntity entity)
         {
-            return _entityToOwnerConnId.GetValueOrDefault(entity, -1);
+            return _entityToOwnerConnId.GetValueOrDefault(entity, INVALID_CONNECTION_ID);
         }
 
         public ServerPredictedEntity GetEntity(int ownerId)
@@ -424,17 +427,18 @@ namespace Prediction
             preSimDuration = System.Diagnostics.Stopwatch.GetTimestamp();
             tickDuration = preSimDuration;
             
+            skipSimulationThisTick = false;
             if (isClient)
             {
                 //Uses latest update for each follower
                 if (PREDICTION_ENABLED)
                 {
-                    if (ClientResimulationCheckPass())
+                    skipSimulationThisTick = ClientResimulationCheckPass();
+                    if (skipSimulationThisTick)
                     {
                         //NOTE: skip this tick as the local history is too far forwards compared to the resimulation tick needed.
                         //TODO: find a way to slow down simulation if the history starts to drift forward compared to the last server reported tick.
                         onTickFrozen.Dispatch(tickId);
-                        return;
                     }
                 }
             }
@@ -444,7 +448,10 @@ namespace Prediction
             ServerPreSimTick();
             preSimDuration = System.Diagnostics.Stopwatch.GetTimestamp() - preSimDuration;
 
-            PHYSICS_CONTROLLER.Simulate();
+            if (!skipSimulationThisTick)
+            {
+                PHYSICS_CONTROLLER.Simulate();
+            }
 
             postSimDuration = System.Diagnostics.Stopwatch.GetTimestamp();
             ClientPostSimTick();
@@ -457,7 +464,10 @@ namespace Prediction
             if (LOG_TIMING || DEBUG) {
                 Debug.Log($"[PredictionManager][Tick] t:{tickId} deltaPrevTick:{interTickDuration} td:{tickDuration} pre:{preSimDuration} post:{postSimDuration} sim:{(tickDuration - preSimDuration - postSimDuration)} resim:{(resimulatedThisTick ? "1" : "0")} freq:{System.Diagnostics.Stopwatch.Frequency} shouldResim:{(shouldResimThisTick ? "1" : "0")}");
             }
-            tickId++;
+            if (!skipSimulationThisTick)
+            {
+                tickId++;
+            }
         }
 
         public void Clear()
@@ -575,15 +585,13 @@ namespace Prediction
                 if (decision == PredictionDecision.RESIMULATE)
                 {
                     shouldResimThisTick = true;
+                    if (!CanResiumlate(fromTick))
+                    {
+                        decision = PredictionDecision.NOOP;
+                        totalResimulationsSkipped++;
+                    }
                 }
-                
-                //OVERSIMULATION PROTECTION
-                if (decision == PredictionDecision.RESIMULATE && !CanResiumlate(fromTick))
-                {
-                    decision = PredictionDecision.NOOP;
-                    totalResimulationsSkipped++;
-                }
-                
+
                 switch (decision)
                 {
                     case PredictionDecision.RESIMULATE:
@@ -726,7 +734,13 @@ namespace Prediction
                             Debug.Log($"[PredictionManager][ClientPreSimTick] Client:{pair.Value} tick:{tickId}");
                         
                         PredictionInputRecord tickInputRecord;
-                        if (PREDICTION_ENABLED || isServer)
+                        if (skipSimulationThisTick)
+                        {
+                            // Frozen: only sample and send the current input so the server can advance its tick.
+                            // Do not apply forces — physics will not simulate this tick.
+                            tickInputRecord = pair.Value.SampleInput(tickId);
+                        }
+                        else if (PREDICTION_ENABLED || isServer)
                         {
                            tickInputRecord = pair.Value.ClientSimulationTick(tickId);
                         }

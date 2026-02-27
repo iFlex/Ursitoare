@@ -59,6 +59,7 @@ namespace Prediction
         public uint lastTick = 0;
         private uint localHistoryEndTickId = 0;
         private uint localHistoryStartTickId = 0;
+        private uint localHistoryTicksProcessed = 0;
         
         private Dictionary<uint, uint> tickResimCounter = new Dictionary<uint, uint>();
         private bool isCurrentStateSpeculative = false;
@@ -248,14 +249,18 @@ namespace Prediction
             if (tickId > localHistoryEndTickId)
             {
                 localHistoryEndTickId = tickId;
-                if (localHistoryEndTickId < localStateBuffer.GetCapacity())
+                uint buflen = (uint)(localStateBuffer.GetCapacity() - 1);
+                if (localHistoryTicksProcessed == 0)
                 {
-                    localHistoryStartTickId = 0;
+                    localHistoryStartTickId = tickId;
                 }
-                else
+                else if(localHistoryTicksProcessed > buflen)
                 {
-                    localHistoryStartTickId = localHistoryEndTickId - (uint)localStateBuffer.GetCapacity();
+                    localHistoryStartTickId = localHistoryEndTickId - buflen;
                 }
+                localHistoryTicksProcessed++;
+                if (DEBUG)
+                    Debug.Log($"[ClientPredictedEntity][FRZ][SamplePhysicsState] id:{id} t:{tickId} buflen:{buflen} localHistoryEndTickId:{localHistoryEndTickId} localHistoryStartTickId:{localHistoryStartTickId}");
             }
             
             preSampleState.Dispatch(true);
@@ -319,32 +324,34 @@ namespace Prediction
             
             lastCheckedServerTickId = serverState.tickId;
             fromTick = serverState.tickId;
-            if (TRUST_ALREADY_RESIMULATED_TICKS && tickResimCounter.GetValueOrDefault(fromTick, 0u) > 1)
+            if (TRUST_ALREADY_RESIMULATED_TICKS && tickResimCounter.GetValueOrDefault(serverState.tickId, 0u) > 1)
             {
                 //TODO: toggle this log
-                Debug.Log($"[RESIMULATION][SKIP_CHECK] i:{id} t:{lastAppliedTick} st:{fromTick}");
+                Debug.Log($"[RESIMULATION][SKIP_CHECK] i:{id} t:{lastAppliedTick} st:{serverState.tickId}");
                 return PredictionDecision.NOOP;
             }
             
-            if (fromTick > lastCheckedServerTickId && (fromTick - lastCheckedServerTickId) > 1)
+            if (serverState.tickId > lastCheckedServerTickId && (serverState.tickId - lastCheckedServerTickId) > 1)
             {
                 devt.reason = DesyncReason.GAP_IN_SERVER_STREAM;
                 devt.tickId = lastAppliedTick;
-                devt.gapSize = fromTick - lastCheckedServerTickId;
+                devt.gapSize = serverState.tickId - lastCheckedServerTickId;
                 potentialDesync.Dispatch(devt);
             }
 
-            if (IsTickOutsideOfLocalHistory(fromTick))
+            if (isControlledLocally && IsTickOutsideOfLocalHistory(serverState.tickId, lastAppliedTick))
             {
                 return PredictionDecision.SIMULATION_FREEZE;
             }
-            return resimulationEligibilityCheckHook(id, fromTick, localStateBuffer, serverStateBuffer);
+            return resimulationEligibilityCheckHook(id, serverState.tickId, localStateBuffer, serverStateBuffer);
         }
 
-        bool IsTickOutsideOfLocalHistory(uint fromId)
+        bool IsTickOutsideOfLocalHistory(uint fromId, uint ltid)
         {
             //Check if the intended rewind target is outside of the stored history
-            return fromId <= localHistoryStartTickId;
+            if (DEBUG)
+                Debug.Log($"[ClientPredictedEntity][FRZ][IsTickOutsideOfLocalHistory] id:{id} lastLocalTick:{ltid} fromId:{fromId} localHistoryStartTickId:{localHistoryStartTickId} processedTicks:{localHistoryTicksProcessed}");
+            return localHistoryTicksProcessed > localStateBuffer.GetCapacity() && fromId < localHistoryStartTickId;
         }
         
         bool AddServerState(uint lastAppliedTick, PhysicsStateRecord serverRecord)
@@ -492,12 +499,15 @@ namespace Prediction
         //TODO: check if there are otherv ars to reset
         public void Reset()
         {
+            if (DEBUG)
+                Debug.Log($"[ClientPredictedEntity][FRZ][Reset] id:{id}");
             lastAppliedFollowerTick = 0;
             resimTicksOverbudget = 0;
             lastTick = 0;
             lastCheckedServerTickId = 0;
             localHistoryStartTickId = 0;
             localHistoryEndTickId = 0;
+            localHistoryTicksProcessed = 0;
             
             localInputBuffer.Clear();
             localStateBuffer.Clear();
