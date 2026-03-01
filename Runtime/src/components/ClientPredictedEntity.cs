@@ -369,6 +369,11 @@ namespace Prediction
                 	Debug.Log($"[ClientPreditedEntity][AddServerState] i:{id} t:{lastAppliedTick} data:{serverRecord}");
             }
             lastSvTickId = serverStateBuffer.GetEndTick();
+            if (isControlledLocally && !PredictionManager.PREDICTION_ENABLED)
+            {
+                //NOTE: this allows you to turn off prediction and show how large the delay is and what it feels like...
+                SnapToServer(lastSvTickId);
+            }
             return serverRecord.tickId == serverStateBuffer.GetEndTick();
         }
         
