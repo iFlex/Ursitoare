@@ -16,7 +16,8 @@ namespace Prediction.Simulation
         public int bufferSize = 60;
         private uint tickId = 1;
         private Dictionary<Rigidbody, RingBuffer<PhysicsStateRecord>> worldHistory = new();
-        private ClientPredictedEntity mainResimulationEntity;
+        HashSet<Rigidbody> notSubjectToResim = new HashSet<Rigidbody>();
+        
 
         public RewindablePhysicsController()
         {
@@ -82,9 +83,15 @@ namespace Prediction.Simulation
             tickId++;
         }
         
-        public void BeforeResimulate(ClientPredictedEntity entity)
+        public virtual void BeforeResimulate(ClientPredictedEntity entity)
         {
-            mainResimulationEntity = entity;
+            if (entity == null)
+            {
+                foreach (Rigidbody rigidbody in notSubjectToResim)
+                {
+                    //TODO
+                }
+            }
         }
     
         public bool Rewind(uint ticks)
@@ -99,9 +106,15 @@ namespace Prediction.Simulation
             return true;
         }
 
-        public void AfterResimulate(ClientPredictedEntity entity)
+        public virtual void AfterResimulate(ClientPredictedEntity entity)
         {
-            mainResimulationEntity = null;
+            if (entity == null)
+            {
+                foreach (Rigidbody rigidbody in notSubjectToResim)
+                {
+                    //TODO
+                }
+            }
         }
 
         void SampleWorldState()
@@ -141,6 +154,16 @@ namespace Prediction.Simulation
         public void Untrack(Rigidbody rigidbody)
         {
             worldHistory.Remove(rigidbody);
+        }
+
+        public void AddIgnoreDuringResim(Rigidbody rigidbody)
+        {
+            notSubjectToResim.Add(rigidbody);
+        }
+
+        public void RemoveIgnoreDuringResim(Rigidbody rigidbody)
+        {
+            notSubjectToResim.Remove(rigidbody);
         }
 
         public void Clear()
