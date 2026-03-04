@@ -10,7 +10,6 @@ namespace Prediction
         
         public static bool SHOW_DBG = false;
         [SerializeField] public GameObject visualsEntity;
-        [SerializeField] private bool debug = false;
         [SerializeField] private GameObject serverGhostPrefab;
         [SerializeField] private GameObject clientGhostPrefab;
         
@@ -39,9 +38,13 @@ namespace Prediction
             visualsEntity.transform.SetParent(null);
             
             interpolationProvider.SetInterpolationTarget(visualsEntity.transform);
-            if (debug)
+            
+            if (serverGhostPrefab)
             {
                 serverGhost = Instantiate(serverGhostPrefab, Vector3.zero, Quaternion.identity);
+            }
+            if (clientGhostPrefab)
+            {
                 clientGhost = Instantiate(clientGhostPrefab, Vector3.zero, Quaternion.identity, clientPredictedEntity.gameObject.transform);
                 clientGhost.transform.localPosition = Vector3.zero;
                 clientGhost.transform.localRotation = Quaternion.identity;
@@ -78,7 +81,7 @@ namespace Prediction
             if (!visualsDetached)
                 return;
 
-            if (debug)
+            if (serverGhost)
             {
                 rec = clientPredictedEntity.serverStateBuffer.GetEnd();
                 if (rec != null && serverGhost)
