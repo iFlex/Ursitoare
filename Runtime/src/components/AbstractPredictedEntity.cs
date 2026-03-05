@@ -92,6 +92,14 @@ namespace Prediction
             }
         }
 
+        public void ClearInput()
+        {
+            for (int i = 0; i < controllablePredictionContributors.Length; ++i)
+            {
+                controllablePredictionContributors[i].ClearInput();
+            }
+        }
+
         public void ApplyForces()
         {
             for (int i = 0; i < predictionContributors.Length; ++i)

@@ -44,6 +44,10 @@ namespace Prediction.Tests.mocks
             inputLoadCallCount++;
         }
 
+        public void ClearInput()
+        {
+        }
+
         public void ApplyForces()
         {
             forceApplyCallCount++;

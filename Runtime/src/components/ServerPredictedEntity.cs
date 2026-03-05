@@ -345,10 +345,12 @@ namespace Prediction
             inputQueue.Clear();
 			isBuffering = USE_BUFFERING;
 			tickId = 0;
-            
+
             invalidInputs = 0;
             ticksWithoutInput = 0;
             lateTickCount = 0;
+
+            ClearInput();
         }
         
         //TODO: decide if to keep?

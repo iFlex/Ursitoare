@@ -13,5 +13,6 @@ namespace Prediction
         void SampleInput(PredictionInputRecord input);
         bool ValidateInput(float deltaTime, PredictionInputRecord input);
         void LoadInput(PredictionInputRecord input);
+        void ClearInput();
     }
 }

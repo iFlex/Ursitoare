@@ -513,11 +513,12 @@ namespace Prediction
             localHistoryStartTickId = 0;
             localHistoryEndTickId = 0;
             localHistoryTicksProcessed = 0;
-            
+
             localInputBuffer.Clear();
             localStateBuffer.Clear();
             serverStateBuffer.Clear();
             tickResimCounter.Clear();
+            ClearInput();
             onReset.Dispatch(true);
         }
         
