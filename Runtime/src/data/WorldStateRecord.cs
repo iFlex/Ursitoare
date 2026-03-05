@@ -3,6 +3,7 @@
     public class WorldStateRecord
     {
         public uint tickId;
+        public uint serverTickId;
         public uint[] entityIDs = new uint[0];
         public PhysicsStateRecord[] states = new PhysicsStateRecord[0];
         public int fill = 0;

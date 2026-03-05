@@ -63,7 +63,7 @@ namespace Prediction.Tests
                 clientEntity.SamplePhysicsState(tickId);
                 serverEntity.BufferClientTick(tickId, record);
                 serverEntity.ServerSimulationTick();
-                PhysicsStateRecord serverRecord = serverEntity.SamplePhysicsState();
+                PhysicsStateRecord serverRecord = serverEntity.SamplePhysicsState(tickId);
                 clientEntity.BufferServerTick(tickId, serverRecord);
                 Assert.AreEqual(tickId, serverRecord.tickId);
                 Assert.AreEqual(serverRecord.position, clientRigidbody.position);
@@ -98,7 +98,7 @@ namespace Prediction.Tests
                 clientEntity.SamplePhysicsState(tickId);
                 serverEntity.BufferClientTick(tickId, record);
                 serverEntity.ServerSimulationTick();
-                PhysicsStateRecord serverRecord = serverEntity.SamplePhysicsState();
+                PhysicsStateRecord serverRecord = serverEntity.SamplePhysicsState(tickId);
                 clientEntity.BufferServerTick(tickId, serverRecord);
             }
             clientComponent.rigidbody = null;
@@ -109,7 +109,7 @@ namespace Prediction.Tests
                 clientEntity.SamplePhysicsState(tickId);
                 serverEntity.BufferClientTick(tickId, record);
                 serverEntity.ServerSimulationTick();
-                PhysicsStateRecord serverRecord = serverEntity.SamplePhysicsState();
+                PhysicsStateRecord serverRecord = serverEntity.SamplePhysicsState(tickId);
                 clientEntity.BufferServerTick(tickId, serverRecord);
             }
 

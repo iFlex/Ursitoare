@@ -65,7 +65,7 @@ namespace Prediction.Tests
 
         void AssertPostServerTickState(int tickId, Vector3 position, Vector3 inputApplied, PhysicsStateRecord state, bool skipInput = false)
         {
-            Assert.AreEqual(tickId, entity.GetTickId());
+            Assert.AreEqual(tickId, entity.GetClientTickId());
             Assert.AreEqual(tickId, state.tickId);
             Assert.AreEqual(position, state.position);
             if (!skipInput)
@@ -82,10 +82,10 @@ namespace Prediction.Tests
         {
             for (int i = 1; i < reports.Length; i++)
             {
-                Assert.AreEqual(i-1, entity.GetTickId());
+                Assert.AreEqual(i-1, entity.GetClientTickId());
                 entity.BufferClientTick((uint) i, reports[i]);
                 entity.ServerSimulationTick();
-                var state = entity.SamplePhysicsState();
+                var state = entity.SamplePhysicsState((uint)i);
 
                 AssertPostServerTickState(i, positions[i], inputs[i], state);
                 Assert.AreEqual(i, component.forceApplyCallCount);
@@ -96,46 +96,47 @@ namespace Prediction.Tests
         [Test]
         public void TestBufferingReceivedMultiPacketsPerTick()
         {
+            uint svTick = 0;
             entity.ServerSimulationTick();
-            Assert.AreEqual(0, entity.GetTickId());
+            Assert.AreEqual(0, entity.GetClientTickId());
             entity.ServerSimulationTick();
-            Assert.AreEqual(0, entity.GetTickId());
-            
+            Assert.AreEqual(0, entity.GetClientTickId());
+
             entity.BufferClientTick(1, reports[1]);
             entity.BufferClientTick(2, reports[2]);
             entity.BufferClientTick(3, reports[3]);
             entity.ServerSimulationTick();
-            AssertPostServerTickState(1, entity.SamplePhysicsState());
-            
+            AssertPostServerTickState(1, entity.SamplePhysicsState(++svTick));
+
             entity.BufferClientTick(4, reports[4]);
             entity.ServerSimulationTick();
-            AssertPostServerTickState(2, entity.SamplePhysicsState());
+            AssertPostServerTickState(2, entity.SamplePhysicsState(++svTick));
             entity.ServerSimulationTick();
-            AssertPostServerTickState(3, entity.SamplePhysicsState());
+            AssertPostServerTickState(3, entity.SamplePhysicsState(++svTick));
             entity.BufferClientTick(5, reports[5]);
             entity.BufferClientTick(6, reports[6]);
             entity.BufferClientTick(7, reports[7]);
             entity.ServerSimulationTick();
-            AssertPostServerTickState(4, entity.SamplePhysicsState());
+            AssertPostServerTickState(4, entity.SamplePhysicsState(++svTick));
             entity.ServerSimulationTick();
-            AssertPostServerTickState(5, entity.SamplePhysicsState());
+            AssertPostServerTickState(5, entity.SamplePhysicsState(++svTick));
             entity.BufferClientTick(8, reports[8]);
             entity.BufferClientTick(9, reports[9]);
             entity.ServerSimulationTick();
-            AssertPostServerTickState(6, entity.SamplePhysicsState());
+            AssertPostServerTickState(6, entity.SamplePhysicsState(++svTick));
             entity.ServerSimulationTick();
-            AssertPostServerTickState(7, entity.SamplePhysicsState());
+            AssertPostServerTickState(7, entity.SamplePhysicsState(++svTick));
             entity.ServerSimulationTick();
-            AssertPostServerTickState(8, entity.SamplePhysicsState());
+            AssertPostServerTickState(8, entity.SamplePhysicsState(++svTick));
             entity.ServerSimulationTick();
-            AssertPostServerTickState(9, entity.SamplePhysicsState());
-            
+            AssertPostServerTickState(9, entity.SamplePhysicsState(++svTick));
+
             entity.ServerSimulationTick();
-            AssertPostServerTickState(9, positions[9] + inputs[9], Vector3.zero, entity.SamplePhysicsState(), true);
+            AssertPostServerTickState(9, positions[9] + inputs[9], Vector3.zero, entity.SamplePhysicsState(++svTick), true);
             entity.ServerSimulationTick();
-            AssertPostServerTickState(9, positions[9] + inputs[9] * 2, Vector3.zero, entity.SamplePhysicsState(), true);
+            AssertPostServerTickState(9, positions[9] + inputs[9] * 2, Vector3.zero, entity.SamplePhysicsState(++svTick), true);
             entity.ServerSimulationTick();
-            AssertPostServerTickState(9, positions[9] + inputs[9] * 3, Vector3.zero, entity.SamplePhysicsState(), true);
+            AssertPostServerTickState(9, positions[9] + inputs[9] * 3, Vector3.zero, entity.SamplePhysicsState(++svTick), true);
             Assert.AreEqual(14, component.forceApplyCallCount);
             Assert.AreEqual(9, component.inputLoadCallCount);
         }
@@ -143,33 +144,34 @@ namespace Prediction.Tests
         [Test]
         public void TestOutOfOrderTicks()
         {
+            uint svTick = 0;
             entity.BufferClientTick(2, reports[2]);
             entity.BufferClientTick(1, reports[1]);
             entity.BufferClientTick(3, reports[3]);
             entity.ServerSimulationTick();
-            AssertPostServerTickState(1, entity.SamplePhysicsState());
+            AssertPostServerTickState(1, entity.SamplePhysicsState(++svTick));
             entity.ServerSimulationTick();
-            AssertPostServerTickState(2, entity.SamplePhysicsState());
+            AssertPostServerTickState(2, entity.SamplePhysicsState(++svTick));
             entity.ServerSimulationTick();
-            AssertPostServerTickState(3, entity.SamplePhysicsState());
+            AssertPostServerTickState(3, entity.SamplePhysicsState(++svTick));
             entity.BufferClientTick(4, reports[4]);
             entity.BufferClientTick(5, reports[5]);
             entity.ServerSimulationTick();
-            AssertPostServerTickState(4, entity.SamplePhysicsState());
+            AssertPostServerTickState(4, entity.SamplePhysicsState(++svTick));
             entity.ServerSimulationTick();
-            AssertPostServerTickState(5, entity.SamplePhysicsState());
+            AssertPostServerTickState(5, entity.SamplePhysicsState(++svTick));
             entity.BufferClientTick(7, reports[7]);
             entity.BufferClientTick(6, reports[6]);
             entity.ServerSimulationTick();
-            AssertPostServerTickState(6, entity.SamplePhysicsState());
+            AssertPostServerTickState(6, entity.SamplePhysicsState(++svTick));
             entity.ServerSimulationTick();
-            AssertPostServerTickState(7, entity.SamplePhysicsState());
+            AssertPostServerTickState(7, entity.SamplePhysicsState(++svTick));
             entity.BufferClientTick(9, reports[9]);
             entity.BufferClientTick(8, reports[8]);
             entity.ServerSimulationTick();
-            AssertPostServerTickState(8, entity.SamplePhysicsState());
+            AssertPostServerTickState(8, entity.SamplePhysicsState(++svTick));
             entity.ServerSimulationTick();
-            AssertPostServerTickState(9, entity.SamplePhysicsState());
+            AssertPostServerTickState(9, entity.SamplePhysicsState(++svTick));
         }
         
         [Test]
@@ -199,7 +201,7 @@ namespace Prediction.Tests
                     entity.BufferClientTick((uint) i, reports[i]);
                 
                 entity.ServerSimulationTick();
-                var state = entity.SamplePhysicsState();
+                var state = entity.SamplePhysicsState((uint)i);
                 if (!doSkip)
                 {
                     lastTicked = i;
@@ -218,6 +220,7 @@ namespace Prediction.Tests
         [Test]
         public void TestLatencyAndJitter()
         {
+            uint svTick = 0;
             Vector3[] serverInput =
             {
                 Vector3.zero, //0
@@ -235,45 +238,46 @@ namespace Prediction.Tests
                 inputs[9]     //12
             };
             Vector3[] serverPos = ClientPredictedEntityTest.ComputePosStream(serverInput, null);
-            
+
             entity.BufferClientTick(2, reports[2]);
             entity.BufferClientTick(1, reports[1]);
             entity.ServerSimulationTick();
-            AssertPostServerTickState(1, entity.SamplePhysicsState());
+            AssertPostServerTickState(1, entity.SamplePhysicsState(++svTick));
             entity.BufferClientTick(3, reports[3]);
             entity.ServerSimulationTick();
-            AssertPostServerTickState(2, entity.SamplePhysicsState());
+            AssertPostServerTickState(2, entity.SamplePhysicsState(++svTick));
             entity.BufferClientTick(4, reports[4]);
             entity.BufferClientTick(5, reports[5]);
             entity.ServerSimulationTick();
-            AssertPostServerTickState(3, entity.SamplePhysicsState());
+            AssertPostServerTickState(3, entity.SamplePhysicsState(++svTick));
             entity.ServerSimulationTick();
-            AssertPostServerTickState(4, entity.SamplePhysicsState());
+            AssertPostServerTickState(4, entity.SamplePhysicsState(++svTick));
             entity.ServerSimulationTick();
-            AssertPostServerTickState(5, entity.SamplePhysicsState());
+            AssertPostServerTickState(5, entity.SamplePhysicsState(++svTick));
             entity.ServerSimulationTick();
-            AssertPostServerTickState(5, serverPos[6], serverInput[6], entity.SamplePhysicsState());
+            AssertPostServerTickState(5, serverPos[6], serverInput[6], entity.SamplePhysicsState(++svTick));
             entity.BufferClientTick(6, reports[6]);
             entity.ServerSimulationTick();
-            AssertPostServerTickState(6, serverPos[7], inputs[6], entity.SamplePhysicsState());
+            AssertPostServerTickState(6, serverPos[7], inputs[6], entity.SamplePhysicsState(++svTick));
             entity.BufferClientTick(7, reports[7]);
             entity.ServerSimulationTick();
-            AssertPostServerTickState(7, serverPos[8], inputs[7], entity.SamplePhysicsState());
+            AssertPostServerTickState(7, serverPos[8], inputs[7], entity.SamplePhysicsState(++svTick));
             entity.ServerSimulationTick();
-            AssertPostServerTickState(7, serverPos[9], serverInput[9], entity.SamplePhysicsState());
+            AssertPostServerTickState(7, serverPos[9], serverInput[9], entity.SamplePhysicsState(++svTick));
             entity.BufferClientTick(8, reports[8]);
             entity.BufferClientTick(9, reports[9]);
             entity.ServerSimulationTick();
-            AssertPostServerTickState(8, serverPos[10], inputs[8], entity.SamplePhysicsState());
+            AssertPostServerTickState(8, serverPos[10], inputs[8], entity.SamplePhysicsState(++svTick));
             entity.ServerSimulationTick();
-            AssertPostServerTickState(9, serverPos[11], inputs[9], entity.SamplePhysicsState());
+            AssertPostServerTickState(9, serverPos[11], inputs[9], entity.SamplePhysicsState(++svTick));
             entity.ServerSimulationTick();
-            AssertPostServerTickState(9, serverPos[12], serverInput[12], entity.SamplePhysicsState(), true);
+            AssertPostServerTickState(9, serverPos[12], serverInput[12], entity.SamplePhysicsState(++svTick), true);
         }
 
         [Test]
         public void TestPacketArrivesTooLate()
         {
+            uint svTick = 0;
             Vector3[] serverInput =
             {
                 Vector3.zero, //0
@@ -288,45 +292,46 @@ namespace Prediction.Tests
                 inputs[9]     //9
             };
             Vector3[] serverPos = ClientPredictedEntityTest.ComputePosStream(serverInput, null);
-        
+
             entity.BufferClientTick(1, reports[1]);
             entity.BufferClientTick(2, reports[2]);
             entity.ServerSimulationTick();
-            AssertPostServerTickState(1, entity.SamplePhysicsState());
+            AssertPostServerTickState(1, entity.SamplePhysicsState(++svTick));
             entity.BufferClientTick(3, reports[3]);
             entity.BufferClientTick(1, reports[1]); //Drop
             entity.ServerSimulationTick();
-            AssertPostServerTickState(2, entity.SamplePhysicsState());
+            AssertPostServerTickState(2, entity.SamplePhysicsState(++svTick));
             entity.BufferClientTick(4, reports[4]);
             entity.ServerSimulationTick();
-            AssertPostServerTickState(3, entity.SamplePhysicsState());
+            AssertPostServerTickState(3, entity.SamplePhysicsState(++svTick));
             entity.ServerSimulationTick();
-            AssertPostServerTickState(4, entity.SamplePhysicsState());
+            AssertPostServerTickState(4, entity.SamplePhysicsState(++svTick));
             entity.BufferClientTick(6, reports[6]);
             entity.ServerSimulationTick();
-            AssertPostServerTickState(6, serverPos[5], inputs[6], entity.SamplePhysicsState());
+            AssertPostServerTickState(6, serverPos[5], inputs[6], entity.SamplePhysicsState(++svTick));
             entity.BufferClientTick(5, reports[5]); //Drop
             entity.ServerSimulationTick();
-            AssertPostServerTickState(6, serverPos[6], serverInput[6], entity.SamplePhysicsState());
+            AssertPostServerTickState(6, serverPos[6], serverInput[6], entity.SamplePhysicsState(++svTick));
             entity.BufferClientTick(4, reports[4]); //Drop
             entity.BufferClientTick(7, reports[7]);
             entity.ServerSimulationTick();
-            AssertPostServerTickState(7, serverPos[7], inputs[7], entity.SamplePhysicsState());
+            AssertPostServerTickState(7, serverPos[7], inputs[7], entity.SamplePhysicsState(++svTick));
             entity.BufferClientTick(9, reports[9]);
             entity.ServerSimulationTick();
-            AssertPostServerTickState(9, serverPos[8], inputs[9], entity.SamplePhysicsState());
+            AssertPostServerTickState(9, serverPos[8], inputs[9], entity.SamplePhysicsState(++svTick));
             entity.BufferClientTick(8, reports[8]); //Drop
             entity.BufferClientTick(6, reports[6]); //Drop
             entity.BufferClientTick(7, reports[7]); //Drop
             entity.ServerSimulationTick();
-            AssertPostServerTickState(9, serverPos[9], serverPos[9], entity.SamplePhysicsState());
+            AssertPostServerTickState(9, serverPos[9], serverPos[9], entity.SamplePhysicsState(++svTick));
         }
 
         [Test]
         public void TestNoBuffering()
         {
+            uint svTick = 0;
             ServerPredictedEntity.USE_BUFFERING = false;
-            
+
             Vector3[] serverInput =
             {
                 Vector3.zero, //0
@@ -336,27 +341,27 @@ namespace Prediction.Tests
                 inputs[4],    //4
             };
             Vector3[] serverPos = ClientPredictedEntityTest.ComputePosStream(serverInput, null);
-            
+
             entity.ServerSimulationTick();
-            PhysicsStateRecord record = entity.SamplePhysicsState();
+            PhysicsStateRecord record = entity.SamplePhysicsState(++svTick);
             Assert.AreEqual(0, record.tickId);
             Assert.AreEqual(Vector3.zero, record.position);
-            
+
             entity.BufferClientTick(1, reports[1]);
             entity.ServerSimulationTick();
-            record = entity.SamplePhysicsState();
+            record = entity.SamplePhysicsState(++svTick);
             Assert.AreEqual(1, record.tickId);
             Assert.AreEqual(serverPos[1], record.position);
-            
+
             entity.BufferClientTick(2, reports[2]);
             entity.ServerSimulationTick();
-            record = entity.SamplePhysicsState();
+            record = entity.SamplePhysicsState(++svTick);
             Assert.AreEqual(2, record.tickId);
             Assert.AreEqual(serverPos[2], record.position);
-            
+
             entity.BufferClientTick(3, reports[3]);
             entity.ServerSimulationTick();
-            record = entity.SamplePhysicsState();
+            record = entity.SamplePhysicsState(++svTick);
             Assert.AreEqual(3, record.tickId);
             Assert.AreEqual(serverPos[3], record.position);
         }
@@ -365,9 +370,10 @@ namespace Prediction.Tests
         [Test]
         public void TestBuffering()
         {
+            uint svTick = 0;
             ServerPredictedEntity.USE_BUFFERING = true;
             ServerPredictedEntity.BUFFER_FULL_THRESHOLD = 3;
-            
+
             Vector3[] serverInput =
             {
                 Vector3.zero, //0
@@ -382,52 +388,52 @@ namespace Prediction.Tests
                 inputs[9]     //9
             };
             Vector3[] serverPos = ClientPredictedEntityTest.ComputePosStream(serverInput, null);
-            
+
             entity.ServerSimulationTick();
-            PhysicsStateRecord record = entity.SamplePhysicsState();
+            PhysicsStateRecord record = entity.SamplePhysicsState(++svTick);
             Assert.AreEqual(0, record.tickId);
             Assert.AreEqual(Vector3.zero, record.position);
-            
+
             entity.BufferClientTick(1, reports[1]);
             entity.ServerSimulationTick();
-            record = entity.SamplePhysicsState();
+            record = entity.SamplePhysicsState(++svTick);
             Assert.AreEqual(0, record.tickId);
             Assert.AreEqual(Vector3.zero, record.position);
-            
+
             entity.BufferClientTick(2, reports[2]);
             entity.ServerSimulationTick();
-            record = entity.SamplePhysicsState();
+            record = entity.SamplePhysicsState(++svTick);
             Assert.AreEqual(0, record.tickId);
             Assert.AreEqual(Vector3.zero, record.position);
-            
+
             entity.BufferClientTick(3, reports[3]);
             entity.ServerSimulationTick();
-            record = entity.SamplePhysicsState();
+            record = entity.SamplePhysicsState(++svTick);
             Assert.AreEqual(1, record.tickId);
             Assert.AreEqual(serverPos[1], record.position);
-            
+
             entity.BufferClientTick(4, reports[4]);
             entity.ServerSimulationTick();
-            record = entity.SamplePhysicsState();
+            record = entity.SamplePhysicsState(++svTick);
             Assert.AreEqual(2, record.tickId);
             Assert.AreEqual(serverPos[2], record.position);
-            
+
             entity.BufferClientTick(5, reports[5]);
             entity.ServerSimulationTick();
-            record = entity.SamplePhysicsState();
+            record = entity.SamplePhysicsState(++svTick);
             Assert.AreEqual(3, record.tickId);
             Assert.AreEqual(serverPos[3], record.position);
-            
+
             entity.BufferClientTick(6, reports[6]);
             entity.ServerSimulationTick();
-            record = entity.SamplePhysicsState();
+            record = entity.SamplePhysicsState(++svTick);
             Assert.AreEqual(4, record.tickId);
             Assert.AreEqual(serverPos[4], record.position);
 
             for (int i = 5; i <= 6; i++)
             {
                 entity.ServerSimulationTick();
-                record = entity.SamplePhysicsState();
+                record = entity.SamplePhysicsState(++svTick);
                 Assert.AreEqual(i, record.tickId);
                 Assert.AreEqual(serverPos[i], record.position);
             }
@@ -435,28 +441,28 @@ namespace Prediction.Tests
             for (int i = 7; i < serverInput.Length; i++)
             {
                 entity.ServerSimulationTick();
-                record = entity.SamplePhysicsState();
+                record = entity.SamplePhysicsState(++svTick);
                 Assert.AreEqual(6, record.tickId);
                 //Assert.AreEqual(serverPos[6], record.position);
             }
-            
+
             entity.BufferClientTick(7, reports[7]);
             entity.ServerSimulationTick();
-            record = entity.SamplePhysicsState();
+            record = entity.SamplePhysicsState(++svTick);
             Assert.AreEqual(6, record.tickId);
             //Assert.AreEqual(serverPos[6], record.position);
-            
+
             entity.BufferClientTick(8, reports[8]);
             entity.ServerSimulationTick();
-            record = entity.SamplePhysicsState();
+            record = entity.SamplePhysicsState(++svTick);
             Assert.AreEqual(6, record.tickId);
             //Assert.AreEqual(serverPos[6], record.position);
-            
+
             entity.BufferClientTick(9, reports[9]);
             for (int i = 7; i < serverInput.Length; i++)
             {
                 entity.ServerSimulationTick();
-                record = entity.SamplePhysicsState();
+                record = entity.SamplePhysicsState(++svTick);
                 Assert.AreEqual(i, record.tickId);
                 //Assert.AreEqual(serverPos[i], record.position);
             }
@@ -472,7 +478,7 @@ namespace Prediction.Tests
             {
                 entity.BufferClientTick((uint) i, reports[i % reports.Length]);
                 entity.ServerSimulationTick();
-                entity.SamplePhysicsState();
+                entity.SamplePhysicsState((uint)i);
                 Assert.AreEqual(0, entity.inputQueue.GetFill());
             }
         }
@@ -495,7 +501,7 @@ namespace Prediction.Tests
             for (int i = 1; i <= 3; ++i)
             {
                 svTick = entity.ServerSimulationTick();
-                entity.SamplePhysicsState();
+                entity.SamplePhysicsState(svTick);
                 Assert.AreEqual(i * 2, svTick);
             }
             svTick = entity.ServerSimulationTick();
@@ -521,7 +527,7 @@ namespace Prediction.Tests
             for (int i = 1; i <= 2; ++i)
             {
                 svTick = entity.ServerSimulationTick();
-                entity.SamplePhysicsState();
+                entity.SamplePhysicsState(svTick);
                 Assert.AreEqual(i * 3, svTick);
             }
         }
@@ -544,19 +550,19 @@ namespace Prediction.Tests
             for (int i = 13; i <= 16; i += 3)
             {
                 svTick = entity.ServerSimulationTick();
-                entity.SamplePhysicsState();
+                entity.SamplePhysicsState(svTick);
                 Assert.AreEqual(i, svTick);
             }
             for (int i = 18; i <= 25; i += 2)
             {
                 svTick = entity.ServerSimulationTick();
-                entity.SamplePhysicsState();
+                entity.SamplePhysicsState(svTick);
                 Assert.AreEqual(i, svTick);
             }
             for (int i = 25; i <= 31; i ++)
             {
                 svTick = entity.ServerSimulationTick();
-                entity.SamplePhysicsState();
+                entity.SamplePhysicsState(svTick);
                 Assert.AreEqual(i, svTick);
             }
             

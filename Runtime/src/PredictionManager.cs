@@ -54,6 +54,7 @@ namespace Prediction
         public bool isServer;
         //TODO: package private
         public uint tickId = 1;
+        public uint reportedServerTickId { get; private set; }
         private bool setup = false;
         public bool autoTrackRigidbodies = true;
         public bool useServerWorldStateMessage = false;
@@ -840,7 +841,7 @@ namespace Prediction
             {
                 ServerPredictedEntity entity = pair.Key;
                 uint id = pair.Value;
-                PhysicsStateRecord state = entity.SamplePhysicsState();
+                PhysicsStateRecord state = entity.SamplePhysicsState(tickId);
                 if (id == localEntityId)
                 {
                     state.input = localEntity.GetLastInput();
@@ -896,6 +897,7 @@ namespace Prediction
             
             if (isClient && !isServer)
             {
+                reportedServerTickId = wsr.serverTickId;
                 for (int i = 0; i < wsr.fill; i++)
                 {
                     wsr.states[i].tickId = wsr.tickId;
@@ -982,6 +984,7 @@ namespace Prediction
         void SendWorldState(WorldStateRecord record)
         {
             IEnumerable<int> connections = connectionsIterator();
+            record.serverTickId = tickId;
             foreach (int connId in connections)
             {
                 uint connTickId = GetLatestAppliedTickForConnection(connId);

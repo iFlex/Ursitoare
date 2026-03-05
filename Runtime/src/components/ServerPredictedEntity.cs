@@ -18,12 +18,16 @@ namespace Prediction
         public static bool SERVER_LOG_VELOCITIES = false;
         public static bool LOG_CLIENT_INUPTS = false;
         public static bool APPLY_OLD_INPUTS_IN_CURRENT_TICK = false;
+        public static bool KEEP_SERVER_STATE_HISTORY = true;
         
         public GameObject gameObject;
-        private PhysicsStateRecord serverStateBfr;
-        private uint tickId;
+        private PhysicsStateRecord serverStateRecord;
+        private uint clientTickId;
+        private uint serverTickId;
+        private RingBuffer<PhysicsStateRecord> serverStateHistory;
         
         //TODO: package private
+        //NOTE: uses client tick ids
         public TickIndexedBuffer<PredictionInputRecord> inputQueue;
         
         //NOTE: Possible to buffer user inputs if needed to try and ensure a closer to client simulation on the server at the
@@ -61,7 +65,16 @@ namespace Prediction
             inputQueue.emptyValue = null;
 
             ticksPerCatchupSection = Mathf.FloorToInt(bufferSize / catchupSections) + 1;
-            serverStateBfr = PhysicsStateRecord.AllocWithComponentState(GetStateFloatCount(), GetStateBoolCount());
+            serverStateRecord = PhysicsStateRecord.AllocWithComponentState(GetStateFloatCount(), GetStateBoolCount());
+            
+            if (KEEP_SERVER_STATE_HISTORY)
+            {
+                serverStateHistory = new RingBuffer<PhysicsStateRecord>(bufferSize);
+                for (int i = 0; i < bufferSize; i++)
+                {
+                    serverStateHistory.Add(new PhysicsStateRecord());
+                }
+            }
         }
 
         DesyncEvent devt = new DesyncEvent();
@@ -93,8 +106,8 @@ namespace Prediction
                 do 
 				{
 					nextInput = inputQueue.Get(queueTickId);
-					if (queueTickId >= tickId) {
-                        int delta = (tickId > queueTickId ? -(int)(tickId - queueTickId) : (int)(queueTickId - tickId));
+					if (queueTickId >= clientTickId) {
+                        int delta = (clientTickId > queueTickId ? -(int)(clientTickId - queueTickId) : (int)(queueTickId - clientTickId));
                         if (delta > 1)
                         {
                             inputJumps++;
@@ -104,17 +117,17 @@ namespace Prediction
                             potentialDesync.Dispatch(devt);
                         }
                         
-						tickId = queueTickId;
+						clientTickId = queueTickId;
 						tickUpdatedFromQueue = true;
 						allInputsBehindTickId = false;
 						inputsBehindBy = 0;
                         
-                        LoadValidateApplyInput(tickId, nextInput);
+                        LoadValidateApplyInput(clientTickId, nextInput);
 						break;
 					} 
                     else if (APPLY_OLD_INPUTS_IN_CURRENT_TICK)
                     {
-                        LoadValidateApplyInput(tickId, nextInput);
+                        LoadValidateApplyInput(clientTickId, nextInput);
                         
                         devt.reason = DesyncReason.LATE_TICK;
                         devt.tickId = queueTickId;
@@ -123,7 +136,7 @@ namespace Prediction
                     
 					inputQueue.Remove(queueTickId);
 					//TODO: do something about this drifting behind
-					inputsBehindBy = tickId - queueTickId;
+					inputsBehindBy = clientTickId - queueTickId;
 					queueTickId++;
 					if (nextInput != null) {
 						inputsApplied++;
@@ -133,7 +146,7 @@ namespace Prediction
 				if (inputsApplied > 1)
             	{
                 	devt.reason = DesyncReason.MULTIPLE_INPUTS_PER_FRAME;
-                	devt.tickId = tickId;
+                	devt.tickId = clientTickId;
                 	potentialDesync.Dispatch(devt);
             	}
 			} 
@@ -142,7 +155,7 @@ namespace Prediction
 				ticksWithoutInput++;
                 
                 devt.reason = DesyncReason.NO_INPUT_FOR_SERVER_TICK;
-                devt.tickId = tickId;
+                devt.tickId = clientTickId;
                 potentialDesync.Dispatch(devt);
 			}
 
@@ -180,7 +193,7 @@ namespace Prediction
         public uint ServerSimulationTick()
         {
 			if (LOG_INPUT_QUEUE_SIZE)
-				Debug.Log($"[ServerPredictedEntity][ServerSimulationTick] i:{id} t:{tickId} inputBufferSize:{inputQueue.GetFill()}");
+				Debug.Log($"[ServerPredictedEntity][ServerSimulationTick] i:{id} t:{clientTickId} inputBufferSize:{inputQueue.GetFill()}");
             
 			if (CanUseBuffer())
             {
@@ -192,7 +205,7 @@ namespace Prediction
                 {
                     int catchup = GetCatchupInputsCount();
                     devt.reason = DesyncReason.CATCHUP;
-                    devt.tickId = tickId;
+                    devt.tickId = clientTickId;
                     potentialDesync.Dispatch(devt);
 
                     while (catchup > 0)
@@ -215,7 +228,7 @@ namespace Prediction
                     totalBufferingTicks++;
                     
                     devt.reason = DesyncReason.INPUT_BUFFERED;
-                    devt.tickId = tickId;
+                    devt.tickId = clientTickId;
                     potentialDesync.Dispatch(devt);
                 }
                 else
@@ -223,12 +236,12 @@ namespace Prediction
                     totalMissingInputTicks++;
                     
                     devt.reason = DesyncReason.NO_INPUT_FOR_SERVER_TICK;
-                    devt.tickId = tickId;
+                    devt.tickId = clientTickId;
                     potentialDesync.Dispatch(devt);
                 }
                 ApplyForces();
             }
-            return GetTickId();
+            return GetClientTickId();
         }
 
         int GetCatchupInputsCount()
@@ -238,27 +251,34 @@ namespace Prediction
             return Mathf.FloorToInt(inputQueue.GetFill() / ticksPerCatchupSection);
         }
         
-        public PhysicsStateRecord SamplePhysicsState()
+        public PhysicsStateRecord SamplePhysicsState(uint svTid)
         {
+            serverTickId = svTid;
             preSampleState.Dispatch(true);
-            PopulatePhysicsStateRecord(GetTickId(), serverStateBfr);
-            serverStateBfr.input = inputQueue.Remove(GetTickId());
-            SampleComponentState(serverStateBfr);
+            PopulatePhysicsStateRecord(GetClientTickId(), serverStateRecord);
+            serverStateRecord.input = inputQueue.Remove(GetClientTickId());
+            SampleComponentState(serverStateRecord);
             stateSampled.Dispatch(true);
             
 			if (DEBUG)
-                Debug.Log($"[ServerPredictedEntity][SamplePhysicsState]({id}) input:{serverStateBfr}");
+                Debug.Log($"[ServerPredictedEntity][SamplePhysicsState]({id}) input:{serverStateRecord}");
             
             if (SERVER_LOG_VELOCITIES)
             {
                 //TODO: this can be done via events in the host application...
-                Debug.Log($"[SV][SIMULATION][DATA] i:{id} t:{tickId} p:{rigidbody.position.ToString("F10")} r:{rigidbody.rotation.ToString("F10")} v:{rigidbody.linearVelocity.ToString("F10")} a:{rigidbody.angularVelocity.ToString("F10")} input:{serverStateBfr.input}");
+                Debug.Log($"[SV][SIMULATION][DATA] i:{id} t:{clientTickId} p:{rigidbody.position.ToString("F10")} r:{rigidbody.rotation.ToString("F10")} v:{rigidbody.linearVelocity.ToString("F10")} a:{rigidbody.angularVelocity.ToString("F10")} input:{serverStateRecord.input}");
             }
 
 			if (tickShouldUpdate) {
-				tickId++;
+				clientTickId++;
 			}
-            return serverStateBfr;
+
+            if (KEEP_SERVER_STATE_HISTORY)
+            {
+                PhysicsStateRecord state = serverStateHistory.Get((int) serverTickId);
+                state.From(serverStateRecord);
+            }
+            return serverStateRecord;
         }
 
         public float TickDeltaToTimeDelta(int delta)
@@ -270,10 +290,10 @@ namespace Prediction
         public uint clUpdateCount = 0;
         public uint clAddedUpdateCount = 0;
         private ClientInput cevt;
-        public void BufferClientTick(uint clientTickId, PredictionInputRecord inputRecord)
+        public void BufferClientTick(uint tid, PredictionInputRecord inputRecord)
         {
             if (DEBUG)
-                Debug.Log($"[ServerPredictedEntity][BufferClientTick]({gameObject.GetInstanceID()}) clientTickId:{clientTickId} tickId:{tickId} input:{inputRecord}");
+                Debug.Log($"[ServerPredictedEntity][BufferClientTick]({gameObject.GetInstanceID()}) clientTickId:{tid} tickId:{this.clientTickId} input:{inputRecord}");
             
             if (inputQueue.GetFill() == 0)
             {
@@ -284,17 +304,17 @@ namespace Prediction
             if (inputQueue.GetFill() == inputQueue.GetCapacity())
             {
                 devt.reason = DesyncReason.TICK_OVERFLOW;
-                devt.tickId = tickId;
+                devt.tickId = this.clientTickId;
                 potentialDesync.Dispatch(devt);
             }
             clAddedUpdateCount++;
-            inputQueue.Add(clientTickId, inputRecord);
+            inputQueue.Add(tid, inputRecord);
             
-            if (clientTickId < tickId)
+            if (tid < clientTickId)
             {
                 lateTickCount++;
                 devt.reason = DesyncReason.LATE_TICK;
-                devt.tickId = tickId;
+                devt.tickId = this.clientTickId;
                 potentialDesync.Dispatch(devt);
             }
 
@@ -306,7 +326,7 @@ namespace Prediction
 
             if (LOG_CLIENT_INUPTS)
             {
-                cevt.tickId = tickId;
+                cevt.tickId = this.clientTickId;
                 cevt.input = inputRecord;
                 inputReceived.Dispatch(cevt);   
             }
@@ -315,14 +335,14 @@ namespace Prediction
         public void ResetClientState()
         {
             //NOTE: use this when changing the controller of the plane.
-            tickId = 0;
+            clientTickId = 0;
             inputQueue.Clear();
             isBuffering = USE_BUFFERING;
         }
         
-        public uint GetTickId()
+        public uint GetClientTickId()
         {
-            return tickId;
+            return clientTickId;
         }
 
         //TODO: unit test the buffering
@@ -346,7 +366,7 @@ namespace Prediction
         {
             inputQueue.Clear();
 			isBuffering = USE_BUFFERING;
-			tickId = 0;
+			clientTickId = 0;
 
             invalidInputs = 0;
             ticksWithoutInput = 0;
