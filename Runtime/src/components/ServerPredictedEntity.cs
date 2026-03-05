@@ -71,12 +71,13 @@ namespace Prediction
 		bool allInputsBehindTickId = false;
 		uint inputsBehindBy = 0;
 
-        void HandleTickInput()
+        void HandleTickInput(bool applyForces = true)
         {
             //NOTE: this also loads TickId with the latest value
 			allInputsBehindTickId = false;
 			inputsBehindBy = 0;
-			
+			bool shouldApplyForces = applyForces;
+
 			if (inputQueue.GetFill() > 0) {
 				allInputsBehindTickId = true;
 				uint maxDelay = inputQueue.GetRange();
@@ -144,8 +145,9 @@ namespace Prediction
                 devt.tickId = tickId;
                 potentialDesync.Dispatch(devt);
 			}
-		
-			ApplyForces();
+
+			if (shouldApplyForces)
+				ApplyForces();
         }
 
         private uint lastInputLoadedTick = 0;
@@ -192,13 +194,13 @@ namespace Prediction
                     devt.reason = DesyncReason.CATCHUP;
                     devt.tickId = tickId;
                     potentialDesync.Dispatch(devt);
-                    
+
                     while (catchup > 0)
                     {
                         catchup--;
                         catchupTicks++;
-                        HandleTickInput();
-                    }   
+                        HandleTickInput(applyForces: catchup == 0);
+                    }
                 }
             }
             else
