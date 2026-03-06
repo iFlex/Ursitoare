@@ -15,7 +15,8 @@ namespace Prediction
         
         public VisualsInterpolationsProvider interpolationProvider { get; private set; }
         private ClientPredictedEntity clientPredictedEntity;
-        
+
+        private Transform serverEntityTransform;
         private GameObject serverGhost;
         private GameObject clientGhost;
         public bool hasVIP = false;
@@ -25,6 +26,12 @@ namespace Prediction
         public double artifficialDelay = 1f;
         private bool visualsDetached = false;
 
+        void DetachVisuals()
+        {
+            visualsDetached = true;
+            visualsEntity.transform.SetParent(null);
+        }
+        
         //NOTE: never call this on the server
         public void SetClientPredictedEntity(ClientPredictedEntity clientPredictedEntity, VisualsInterpolationsProvider provider)
         {
@@ -34,9 +41,7 @@ namespace Prediction
             //TODO: what? why artifficial delay?
             currentTimeStep -= artifficialDelay;
             
-            visualsDetached = true;
-            visualsEntity.transform.SetParent(null);
-            
+            DetachVisuals();
             interpolationProvider.SetInterpolationTarget(visualsEntity.transform);
             
             if (serverGhostPrefab)
@@ -52,6 +57,13 @@ namespace Prediction
             
             clientPredictedEntity.newStateReached.AddEventListener(AggregateState);
             SetControlledLocally(false);
+        }
+        
+        //NOTE: you should detach visuals even on server if they have colliders on them, because those colliders will behave differently on client vs server if one is detached and one is not.
+        public void SetServerPredictedEntity(Transform serverPredictedEntity)
+        {
+            DetachVisuals();
+            serverEntityTransform = serverPredictedEntity;
         }
 
         public void Destroy(bool ignore)
@@ -90,7 +102,19 @@ namespace Prediction
                     serverGhost.transform.rotation = rec.rotation;   
                 }
             }
-            interpolationProvider.Update(Time.deltaTime, PredictionManager.Instance.tickId);
+
+            if (visualsDetached)
+            {
+                if (clientPredictedEntity != null)
+                {
+                    interpolationProvider.Update(Time.deltaTime, PredictionManager.Instance.tickId);
+                }
+                else if (serverEntityTransform)
+                {
+                    transform.position = serverEntityTransform.position;
+                    transform.rotation = serverEntityTransform.rotation;
+                }
+            }
         }
 
         void OnShouldReset(bool ign)
