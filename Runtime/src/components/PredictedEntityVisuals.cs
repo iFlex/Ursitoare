@@ -17,6 +17,7 @@ namespace Prediction
         private ClientPredictedEntity clientPredictedEntity;
 
         private Transform serverEntityTransform;
+        private Transform logicalEntityTransform;
         private GameObject serverGhost;
         private GameObject clientGhost;
         public bool hasVIP = false;
@@ -25,9 +26,11 @@ namespace Prediction
         public double targetTime = 0;
         public double artifficialDelay = 1f;
         private bool visualsDetached = false;
-
+        protected float interpolationDistance = 0;
+        
         void DetachVisuals()
         {
+            logicalEntityTransform = visualsEntity.transform.parent;
             visualsDetached = true;
             visualsEntity.transform.SetParent(null);
         }
@@ -108,6 +111,7 @@ namespace Prediction
                 if (clientPredictedEntity != null)
                 {
                     interpolationProvider.Update(Time.deltaTime, PredictionManager.Instance.tickId);
+                    interpolationDistance = (visualsEntity.transform.position - logicalEntityTransform.position).magnitude;
                 }
                 else if (serverEntityTransform)
                 {
@@ -130,6 +134,11 @@ namespace Prediction
         public void SetControlledLocally(bool ctlLoc)
         {
             interpolationProvider?.SetControlledLocally(ctlLoc);
+        }
+
+        public float GetInterpolationDistance()
+        {
+            return interpolationDistance;
         }
     }
 }
