@@ -384,6 +384,15 @@ namespace Prediction
             inputQueue.Add(tick, pir);
         }
 
+        public PhysicsStateRecord GetStateAtTick(uint tick)
+        {
+            if (serverStateHistory == null)
+                return null;
+            
+            //TODO: bounds guard
+            return serverStateHistory.Get((int) tick);
+        }
+        
         public enum DesyncReason
         {
             NO_INPUT_FOR_SERVER_TICK = 0,
