@@ -4,6 +4,16 @@
 
 Physics simulation runs at a fixed tick rate, but rendering runs at the display frame rate. Without interpolation, objects would visibly stutter. Ursitoare decouples visuals from physics by separating the visual `GameObject` from the physics body and driving it with an interpolator in `Update`.
 
+```
+Physics (FixedUpdate, e.g. 50 Hz):   ●─────●─────●─────●─────●
+                                       ↑     ↑     ↑     ↑     ↑
+                                       known positions (discrete)
+
+Visuals (Update, e.g. 144 Hz):       ·····························
+                                       ↑ ↑ ↑ ↑ ↑ ↑ ↑ ↑ ↑ ↑ ↑ ↑
+                                       interpolated positions (smooth)
+```
+
 ## Detached Visuals
 
 When `PredictedEntityVisuals.SetClientPredictedEntity` is called, it detaches the `visualsEntity` from its parent transform. From that point on, the visuals object moves independently of the physics body. The `VisualsInterpolationsProvider` updates its position and rotation each frame.

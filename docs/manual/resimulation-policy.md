@@ -2,7 +2,20 @@
 
 ## Overview
 
-Each tick, `PredictionManager` asks every registered `ClientPredictedEntity` whether it needs to resimulate. The entity delegates this question to a `SingleSnapshotInstanceResimChecker`. The checker compares a local physics snapshot against the matching server snapshot and returns a `PredictionDecision`.
+Each tick, `PredictionManager` asks every registered `ClientPredictedEntity` whether it needs to resimulate. The entity delegates this question to a `SingleSnapshotInstanceResimChecker`. The checker compares the client's local physics snapshot against the server's snapshot **at the same tick ID** and returns a `PredictionDecision`.
+
+This comparison is possible because the server tags every state it sends with the **client's tick ID**. The client looks up its own stored prediction at that tick and compares the two.
+
+```
+Server state arrives: tickId = 42, position = (3.1, 0, 2.8)
+                                         │
+Client looks up local state at tick 42:  │
+  localStateBuffer[42] = (3.0, 0, 2.7)  │
+                                         ▼
+  Checker compares:
+    position distance = 0.14  →  exceeds threshold (0.0001)
+    → return RESIMULATE
+```
 
 ## PredictionDecision
 
@@ -11,9 +24,9 @@ Each tick, `PredictionManager` asks every registered `ClientPredictedEntity` whe
 | Value | Meaning |
 |---|---|
 | `NOOP` | States match. No action needed. |
-| `RESIMULATE` | Desync detected. Rewind and replay. |
-| `SNAP` | Desync is large enough to teleport directly. No replay. |
-| `SIMULATION_FREEZE` | Server snapshot is older than local history. Pause simulation. |
+| `RESIMULATE` | Desync detected. Client rewinds and replays from the divergence tick. |
+| `SNAP` | Desync is large enough to teleport directly to server state. No replay. |
+| `SIMULATION_FREEZE` | Server snapshot is older than local history. Pause simulation until server catches up. |
 
 The `PredictionManager` takes the highest-severity decision across all entities.
 

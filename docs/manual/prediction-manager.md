@@ -4,6 +4,8 @@
 
 `PredictionManager` is the central coordinator of the prediction system. It is a plain C# class, not a MonoBehaviour. You create one instance, configure it, and call `Tick()` from `FixedUpdate` every frame.
 
+The manager orchestrates the entire prediction loop: it drives the tick loop, checks for desyncs, triggers resimulation, and calls your network delegates to send and receive data.
+
 ## Setup
 
 Create an instance and assign all required delegates before calling `Setup`.
@@ -34,6 +36,30 @@ void FixedUpdate()
 {
     PredictionManager.Instance.Tick();
 }
+```
+
+Each call to `Tick()` drives one full simulation step:
+
+```
+Tick()
+ │
+ ├─ 1. Resimulation check (client only)
+ │     Query all ClientPredictedEntities for PredictionDecision
+ │     If RESIMULATE: rewind → snap → replay
+ │     If FREEZE: skip this tick entirely
+ │
+ ├─ 2. Pre-simulation
+ │     Client (local):    SampleInput → LoadInput → ApplyForces → send input to server
+ │     Client (follower): Snap to latest server state → ApplyForces
+ │     Server:            Dequeue client input → Validate → LoadInput → ApplyForces
+ │
+ ├─ 3. Physics.Simulate(fixedDeltaTime)
+ │
+ ├─ 4. Post-simulation
+ │     Client: Sample and store Rigidbody state in local buffer
+ │     Server: Sample Rigidbody state → send to all clients (tagged with client tick ID)
+ │
+ └─ 5. tickId++
 ```
 
 ## Entity Registration
@@ -82,11 +108,28 @@ Wire these into your networking layer's receive callbacks:
 
 ## Resimulation
 
-The manager automatically handles resimulation. Each tick, it queries all registered `ClientPredictedEntity` instances for their `PredictionDecision`. If any entity requests `RESIMULATE`, the manager:
+The manager automatically handles resimulation on the **client**. Each tick, it queries all registered `ClientPredictedEntity` instances for their `PredictionDecision`. If any entity requests `RESIMULATE`, the manager:
 
 1. Rewinds the `PhysicsController` to the divergence tick.
 2. Snaps each affected entity to the server's recorded state at that tick.
-3. Replays each intermediate tick by re-applying stored inputs and simulating physics.
+3. Replays each intermediate tick by re-loading stored inputs and re-applying forces, then stepping physics.
+
+```
+Resimulation triggered at tick 12, server says tick 8 was wrong:
+
+  Rewind physics to tick 8
+  ┌─────────────────────────────────────────────────────────┐
+  │ Snap all entities to server state at tick 8             │
+  │ Store resimulated state at tick 8                       │
+  ├─────────────────────────────────────────────────────────┤
+  │ Tick  9: LoadInput[9] → ApplyForces → Simulate → Store │
+  │ Tick 10: LoadInput[10] → ApplyForces → Simulate → Store│
+  │ Tick 11: LoadInput[11] → ApplyForces → Simulate → Store│
+  └─────────────────────────────────────────────────────────┘
+  Now at tick 12 with corrected history
+```
+
+During replay, if the server has also provided authoritative state for intermediate ticks (e.g., tick 9 or 10), the entity snaps to those states as well, giving the most accurate correction.
 
 `DO_RESIM` and `DO_SNAP` flags can disable resimulation or snapping globally for debugging.
 

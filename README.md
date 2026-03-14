@@ -1,13 +1,43 @@
 # Ursitoare
 
-Ursitoare is a client-side prediction and server reconciliation library for Unity. It handles the full prediction loop: input sampling, physics simulation, server state buffering, desync detection, and resimulation. It does **not** include a networking layer. You wire in your own transport by implementing a small set of callbacks.
+Ursitoare is a client-side prediction and server reconciliation library for Unity. It handles the full prediction loop: input sampling, physics simulation, server state buffering, desync detection, and resimulation. It does **not** include a networking layer — you wire in your own transport by assigning a small set of delegates.
 
 ## Key Concepts
 
-- **Tick-based simulation.** The game world advances in fixed steps. Each step is a tick.
-- **Client authority.** The locally controlled entity simulates ahead of the server. The server reconciles its result back to the client.
-- **Resimulation.** When the server reports a state that differs from the client's prediction, the client rewinds physics and replays from the divergence point.
-- **Network agnosticism.** Ursitoare has no dependency on any networking library. You supply function delegates for sending and receiving messages. See the [Integration Tutorial](docs/integration-tutorial.md).
+- **Network library agnostic.** Ursitoare has zero dependency on any networking library. It communicates exclusively through function delegates you assign. Mirror, Netcode for GameObjects, Fish-Net, LiteNetLib, custom UDP — any transport works. You serialize, send, and receive; Ursitoare handles the prediction logic. See the [Integration Tutorial](docs/integration-tutorial.md).
+
+- **Tick-based simulation.** The game world advances in fixed steps. Each step is a tick. Both client and server share this concept, but advance independently.
+
+- **Client-side prediction.** The locally controlled entity simulates immediately, without waiting for a server round-trip. The client runs ahead of the server.
+
+- **Client-side reconciliation.** When the server sends back its authoritative state, the **client** compares it against its own prediction. If they differ, the **client** rewinds physics and replays from the divergence point. The server is purely authoritative — it never rewinds or replays.
+
+- **Tick-tagged updates.** Every input the client sends and every state the server returns is tagged with the client's tick ID. This shared tick ID is how the client knows exactly which local prediction to compare against, and exactly which tick to rewind to when a desync is detected. See [Overview & Architecture](docs/manual/overview.md) for details.
+
+## How It Works (At a Glance)
+
+```
+  CLIENT                                          SERVER
+  ──────                                          ──────
+  Tick 10: Sample input ──────────────────────►  Receives input for Tick 10
+           Apply forces                          Validates input
+           Simulate physics                      Applies input
+           Store prediction locally              Simulates physics
+           Send input (tagged Tick 10)            Samples state
+                                                 Sends state (tagged Tick 10)
+  ...                                             │
+  Tick 14: ◄──────────────────────────────────── State for Tick 10 arrives
+           Compare local Tick 10
+           vs server Tick 10
+           ┌─────────────────────┐
+           │ Desync detected?    │
+           │  YES → Rewind to 10 │
+           │        Snap to      │
+           │        server state │
+           │        Replay 11-14 │
+           │  NO  → Continue     │
+           └─────────────────────┘
+```
 
 ## Documentation
 
@@ -17,7 +47,7 @@ Conceptual guides explaining how the system works.
 
 | Page | Description |
 |---|---|
-| [Overview & Architecture](docs/manual/overview.md) | System design, tick loop, roles |
+| [Overview & Architecture](docs/manual/overview.md) | System design, tick loop, tick tagging, roles |
 | [PredictionManager](docs/manual/prediction-manager.md) | The central coordinator |
 | [Entities](docs/manual/entities.md) | Client and server entity types |
 | [Physics Controllers](docs/manual/physics-controllers.md) | Pluggable simulation backends |

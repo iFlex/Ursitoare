@@ -2,7 +2,7 @@
 
 ## Overview
 
-A `PhysicsController` manages Unity's physics simulation. It controls when `Physics.Simulate` is called and how the physics world is rewound during resimulation. You assign a controller to `PredictionManager.PHYSICS_CONTROLLER` before calling `Setup`.
+A `PhysicsController` manages Unity's physics simulation. It controls when `Physics.Simulate` is called and how the physics world is rewound during client-side resimulation. You assign a controller to `PredictionManager.PHYSICS_CONTROLLER` before calling `Setup`.
 
 All controllers set `Physics.simulationMode = SimulationMode.Script` during `Setup`, taking manual control of when physics steps occur.
 
@@ -11,6 +11,17 @@ All controllers set `Physics.simulationMode = SimulationMode.Script` during `Set
 `RewindablePhysicsController` is the default and recommended controller. It records the state of every tracked `Rigidbody` after each tick. When resimulation requires rewinding, it restores the recorded state.
 
 ### How It Works
+
+```
+Tick 5:  Physics.Simulate() → snapshot all tracked bodies → store in ring buffer[5]
+Tick 6:  Physics.Simulate() → snapshot all tracked bodies → store in ring buffer[6]
+Tick 7:  Physics.Simulate() → snapshot all tracked bodies → store in ring buffer[7]
+  ...
+Resimulation needed, rewind to tick 5:
+  Restore all tracked bodies from ring buffer[5]
+  → physics world is now at the end of tick 5
+  → ready to replay ticks 6, 7, ...
+```
 
 - **Tracking.** When `PredictionManager.AddPredictedEntity` is called with `autoTrackRigidbodies = true`, the entity's `Rigidbody` is automatically passed to `Track`. The controller allocates a `RingBuffer<PhysicsStateRecord>` for that body.
 - **Simulate.** Each tick, `Physics.Simulate(fixedDeltaTime)` runs and then the controller snapshots all tracked bodies into their ring buffers.
