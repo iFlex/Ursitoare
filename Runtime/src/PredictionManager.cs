@@ -471,6 +471,15 @@ namespace Prediction
             }
         }
 
+        public uint GetServerTickId()
+        {
+            if (isServer)
+            {
+                return tickId;
+            }
+            return reportedServerTickId;
+        }
+        
         public void Clear()
         {
             //TODO: unit test
