@@ -2,7 +2,6 @@
 
 namespace Prediction.utils
 {
-    //TODO: prevent duplication
     public class TickIndexedBuffer<T>
     {
         public T emptyValue = default(T);

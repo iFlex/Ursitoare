@@ -5,7 +5,6 @@ using UnityEngine;
 
 namespace Prediction
 {
-    //TODO: document in readme
     public class ServerPredictedEntity : AbstractPredictedEntity
     {
         public static bool DEBUG = false;

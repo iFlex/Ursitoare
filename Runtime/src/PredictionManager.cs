@@ -18,7 +18,6 @@ namespace Prediction
         public static bool DO_RESIM = true;
         public static bool DO_SNAP = true;
         
-        //TODO: unit test
         public static bool IGNORE_NON_AUTH_RESIM_DECISIONS = false;
         public static bool IGNORE_CONTROLLABLE_FOLLOWER_DECISIONS = true;
         public static bool LOG_PRE_SIM_STATE = false;
