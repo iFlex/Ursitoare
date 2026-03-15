@@ -426,6 +426,16 @@ namespace Prediction
             LoadComponentState(serverState);
         }
 
+        public void SnapToLatestServerAndReset()
+        {
+            PhysicsStateRecord latestServer = serverStateBuffer.GetEnd();
+            if (latestServer != null)
+            {
+                SnapTo(latestServer);
+            }
+            Reset();
+        }
+
         public void PreResimulationStep(uint tickId)
         {
             if (isControlledLocally)

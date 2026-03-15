@@ -606,13 +606,15 @@ namespace Prediction
                     case PredictionDecision.RESIMULATE:
                         Resimulate(fromTick);
                         break;
-                    
+
                     case PredictionDecision.SNAP:
                         Snap();
                         break;
-                }
 
-                return decision == PredictionDecision.SIMULATION_FREEZE;
+                    case PredictionDecision.SIMULATION_FREEZE:
+                        SnapAllToServerAndReset();
+                        return true;
+                }
             }
             return false;
         }
@@ -725,7 +727,18 @@ namespace Prediction
                 {
                     pair.Value.SnapToServer(localFromTick);
                 }
-            } 
+            }
+        }
+
+        void SnapAllToServerAndReset()
+        {
+            foreach (KeyValuePair<uint, ClientPredictedEntity> pair in _clientEntities)
+            {
+                pair.Value.SnapToLatestServerAndReset();
+            }
+            
+            Debug.Log($"[PredictionManager][SnapAllToServerAndReset] tickId:{tickId}");
+            onSnapToServer.Dispatch(tickId);
         }
 
         public bool shouldResimThisTick = false;
@@ -1063,5 +1076,6 @@ namespace Prediction
         public SafeEventDispatcher<bool> resimulation = new();
         public SafeEventDispatcher<bool> resimulationStep = new();
         public SafeEventDispatcher<uint> onTickFrozen = new();
+        public SafeEventDispatcher<uint> onSnapToServer = new();
     }
 }
