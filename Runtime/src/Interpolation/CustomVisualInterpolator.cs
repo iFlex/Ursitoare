@@ -1,10 +1,11 @@
-// Copyright (c) 2026 Milorad Liviu Felix
+﻿// Copyright (c) 2026 Milorad Liviu Felix
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
-﻿using System;
+
+using System;
 using System.Runtime.CompilerServices;
-using Prediction.data;
+using Prediction.Data;
 using Prediction.Interpolation;
-using Prediction.utils;
+using Prediction.Utils;
 using UnityEngine;
 
 namespace Adapters.Prediction

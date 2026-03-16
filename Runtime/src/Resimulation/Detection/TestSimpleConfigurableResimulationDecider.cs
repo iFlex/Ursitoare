@@ -1,9 +1,11 @@
-// Copyright (c) 2026 Milorad Liviu Felix
+﻿// Copyright (c) 2026 Milorad Liviu Felix
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
-﻿using Prediction.data;
+
+using Prediction.Components.Controllers;
+using Prediction.Data;
 using UnityEngine;
 
-namespace Prediction.policies.singleInstance
+namespace Prediction.Resimulation.Detection
 {
     public class TestSimpleConfigurableResimulationDecider : SingleSnapshotInstanceResimChecker
     {

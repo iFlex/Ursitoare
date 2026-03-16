@@ -1,7 +1,9 @@
-// Copyright (c) 2026 Milorad Liviu Felix
+﻿// Copyright (c) 2026 Milorad Liviu Felix
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
-﻿#if (UNITY_EDITOR) 
-using Prediction.data;
+
+#if (UNITY_EDITOR)
+using Prediction.Components;
+using Prediction.Data;
 using UnityEngine;
 
 namespace Prediction.Tests.mocks

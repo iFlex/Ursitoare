@@ -1,9 +1,11 @@
-// Copyright (c) 2026 Milorad Liviu Felix
+﻿// Copyright (c) 2026 Milorad Liviu Felix
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
-﻿#if (UNITY_EDITOR) 
+
+#if (UNITY_EDITOR) 
 using NUnit.Framework;
-using Prediction.data;
-using Prediction.policies.singleInstance;
+using Prediction.Components.Controllers;
+using Prediction.Data;
+using Prediction.Resimulation.Detection;
 using Prediction.Tests.mocks;
 using UnityEngine;
 using Assert = UnityEngine.Assertions.Assert;

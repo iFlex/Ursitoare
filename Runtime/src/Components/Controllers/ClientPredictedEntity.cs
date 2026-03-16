@@ -1,14 +1,15 @@
 // Copyright (c) 2026 Milorad Liviu Felix
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
-﻿using System;
+
+using System;
 using System.Collections.Generic;
 using Sector0.Events;
-using Prediction.data;
-using Prediction.policies.singleInstance;
-using Prediction.utils;
+using Prediction.Data;
+using Prediction.Resimulation.Detection;
+using Prediction.Utils;
 using UnityEngine;
 
-namespace Prediction
+namespace Prediction.Components.Controllers
 {
     //TODO: document in readme
     public class ClientPredictedEntity : AbstractPredictedEntity

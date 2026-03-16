@@ -1,10 +1,11 @@
-// Copyright (c) 2026 Milorad Liviu Felix
+﻿// Copyright (c) 2026 Milorad Liviu Felix
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
-﻿using Prediction.data;
+
+using Prediction.Data;
 using Prediction.Interpolation;
 using UnityEngine;
 
-namespace Prediction
+namespace Prediction.Components.Controllers
 {
     public class PredictedEntityVisuals : MonoBehaviour
     {

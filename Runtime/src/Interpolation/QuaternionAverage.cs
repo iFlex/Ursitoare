@@ -1,6 +1,7 @@
-// Copyright (c) 2026 Milorad Liviu Felix
+﻿// Copyright (c) 2026 Milorad Liviu Felix
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
-﻿using UnityEngine;
+
+using UnityEngine;
 
 // Quaternion Dark Magic
 // https://theorangeduck.com/page/quaternion-weighted-average#:~:text=Essentially%20we%20just%20keep%20a,quat_abs%20function%20if%20we%20like.
