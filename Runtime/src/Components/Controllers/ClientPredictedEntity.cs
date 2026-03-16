@@ -411,16 +411,19 @@ namespace Prediction.Components.Controllers
             PhysicsStateRecord state = serverStateBuffer.Get(tickId);
             if (state == null)
             {
-                //TODO: do we need to do something?
                 countMissingServerHistory++;
 
                 devt.reason = DesyncReason.SNAP_TO_SERVER_NO_DATA;
                 devt.tickId = tickId;
                 potentialDesync.Dispatch(devt);
-                return;
+                
+                //TODO: unit test this branch!
+                //TODO: check if state is in bounds
+                state = localStateBuffer.Get((int) tickId);
             }
-            
-            SnapTo(state);
+
+            if (state != null)
+                SnapTo(state);
         }
 
         void SnapTo(PhysicsStateRecord serverState)
