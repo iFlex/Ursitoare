@@ -18,6 +18,11 @@ namespace Prediction
         public static bool LOG_CLIENT_INUPTS = false;
         public static bool APPLY_OLD_INPUTS_IN_CURRENT_TICK = false;
         public static bool KEEP_SERVER_STATE_HISTORY = true;
+        //NOTE: if the client updates buffer grows past a certain threshold
+        //that means the server has fallen behind time wise. So we should snap ahead to the latest client state.
+        public static int CATCHUP_SECTIONS = 3;
+        public static bool IGNORE_OLD_INPUT = true;
+
         
         public GameObject gameObject;
         private PhysicsStateRecord serverStateRecord;
@@ -31,12 +36,8 @@ namespace Prediction
         
         //NOTE: Possible to buffer user inputs if needed to try and ensure a closer to client simulation on the server at the
         //cost of delaying the server behind the client by a small margin. The more you buffer, the more the server is delayed, the less reliable is the client image.
-        
         private bool isBuffering = false;
-
-        //NOTE: if the client updates buffer grows past a certain threshold
-        //that means the server has fallen behind time wise. So we should snap ahead to the latest client state.
-        public int catchupSections = 3;
+        
         public int ticksPerCatchupSection = 0;
         
         //STATS
@@ -63,7 +64,7 @@ namespace Prediction
             inputQueue = new TickIndexedBuffer<PredictionInputRecord>(bufferSize);
             inputQueue.emptyValue = null;
 
-            ticksPerCatchupSection = Mathf.FloorToInt(bufferSize / catchupSections) + 1;
+            ticksPerCatchupSection = Mathf.FloorToInt(bufferSize / CATCHUP_SECTIONS) + 1;
             serverStateRecord = PhysicsStateRecord.AllocWithComponentState(GetStateFloatCount(), GetStateBoolCount());
             
             if (KEEP_SERVER_STATE_HISTORY)
@@ -104,6 +105,8 @@ namespace Prediction
                 do 
 				{
 					nextInput = inputQueue.Get(queueTickId);
+                    inputQueue.Remove(queueTickId);
+                    
 					if (queueTickId >= clientTickId) {
                         int delta = (clientTickId > queueTickId ? -(int)(clientTickId - queueTickId) : (int)(queueTickId - clientTickId));
                         if (delta > 1)
@@ -132,8 +135,6 @@ namespace Prediction
                         potentialDesync.Dispatch(devt);
                     }
                     
-					inputQueue.Remove(queueTickId);
-					//TODO: do something about this drifting behind
 					inputsBehindBy = clientTickId - queueTickId;
 					queueTickId++;
 					if (nextInput != null) {
@@ -201,6 +202,7 @@ namespace Prediction
                     int catchup = GetCatchupInputsCount();
                     devt.reason = DesyncReason.CATCHUP;
                     devt.tickId = clientTickId;
+                    devt.gapSize = (uint) catchup;
                     potentialDesync.Dispatch(devt);
 
                     while (catchup > 0)
@@ -302,8 +304,6 @@ namespace Prediction
                 devt.tickId = this.clientTickId;
                 potentialDesync.Dispatch(devt);
             }
-            clAddedUpdateCount++;
-            inputQueue.Add(tid, inputRecord);
             
             if (tid < clientTickId)
             {
@@ -311,14 +311,17 @@ namespace Prediction
                 devt.reason = DesyncReason.LATE_TICK;
                 devt.tickId = this.clientTickId;
                 potentialDesync.Dispatch(devt);
+                if (IGNORE_OLD_INPUT)
+                    return;
             }
+
+            clAddedUpdateCount++;
+            inputQueue.Add(tid, inputRecord);
 
             if (isBuffering)
             {
                 isBuffering = inputQueue.GetFill() < BUFFER_FULL_THRESHOLD;
-	
             }
-
             if (LOG_CLIENT_INUPTS)
             {
                 cevt.tickId = this.clientTickId;
@@ -407,6 +410,7 @@ namespace Prediction
         {
             public uint tickId;
             public DesyncReason reason;
+            public uint gapSize;
         }
 
         public struct ClientInput
