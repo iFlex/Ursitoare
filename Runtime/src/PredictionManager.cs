@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Milorad Liviu Felix
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Sector0.Events;
 using Prediction.data;
@@ -75,13 +75,10 @@ namespace Prediction
         public Func<IEnumerable<int>> connectionsIterator;
         private WorldStateRecord _worldStateRecord = new WorldStateRecord();
         
-        public bool snapOnSimSkip = false;
         //NOTE: either use protectFromOversimulation or TRUST_ALREADY_RESIMULATED_TICKS, no both
         public bool protectFromOversimulation = true;
         public uint maxTickResimulationCount = 1;
         private Dictionary<uint, uint> tickResimCounter = new Dictionary<uint, uint>();
-        
-        private bool skipSimulationThisTick = false;
         
         public uint totalResimulationsDueToAuthority = 0;
         public uint totalResimulationsDueToFollowers = 0;
@@ -429,19 +426,12 @@ namespace Prediction
             preSimDuration = System.Diagnostics.Stopwatch.GetTimestamp();
             tickDuration = preSimDuration;
             
-            skipSimulationThisTick = false;
             if (isClient)
             {
                 //Uses latest update for each follower
                 if (PREDICTION_ENABLED)
                 {
-                    skipSimulationThisTick = ClientResimulationCheckPass();
-                    if (skipSimulationThisTick)
-                    {
-                        //NOTE: skip this tick as the local history is too far forwards compared to the resimulation tick needed.
-                        //TODO: find a way to slow down simulation if the history starts to drift forward compared to the last server reported tick.
-                        onTickFrozen.Dispatch(tickId);
-                    }
+                    ClientResimulationCheckPass();
                 }
             }
             onPreTick.Dispatch(tickId);
@@ -450,11 +440,8 @@ namespace Prediction
             ServerPreSimTick();
             preSimDuration = System.Diagnostics.Stopwatch.GetTimestamp() - preSimDuration;
 
-            if (!skipSimulationThisTick)
-            {
-                PHYSICS_CONTROLLER.Simulate();
-            }
-
+            PHYSICS_CONTROLLER.Simulate();
+            
             postSimDuration = System.Diagnostics.Stopwatch.GetTimestamp();
             ClientPostSimTick();
             ServerPostSimTick();
@@ -466,10 +453,8 @@ namespace Prediction
             if (LOG_TIMING || DEBUG) {
                 Debug.Log($"[PredictionManager][Tick] t:{tickId} deltaPrevTick:{interTickDuration} td:{tickDuration} pre:{preSimDuration} post:{postSimDuration} sim:{(tickDuration - preSimDuration - postSimDuration)} resim:{(resimulatedThisTick ? "1" : "0")} freq:{System.Diagnostics.Stopwatch.Frequency} shouldResim:{(shouldResimThisTick ? "1" : "0")}");
             }
-            if (!skipSimulationThisTick)
-            {
-                tickId++;
-            }
+            
+            tickId++;
         }
 
         public uint GetServerTickId()
@@ -758,13 +743,7 @@ namespace Prediction
                             Debug.Log($"[PredictionManager][ClientPreSimTick] Client:{pair.Value} tick:{tickId}");
                         
                         PredictionInputRecord tickInputRecord;
-                        if (skipSimulationThisTick)
-                        {
-                            // Frozen: only sample and send the current input so the server can advance its tick.
-                            // Do not apply forces — physics will not simulate this tick.
-                            tickInputRecord = pair.Value.SampleInput(tickId);
-                        }
-                        else if (PREDICTION_ENABLED || isServer)
+                        if (PREDICTION_ENABLED || isServer)
                         {
                            tickInputRecord = pair.Value.ClientSimulationTick(tickId);
                         }
@@ -1077,7 +1056,6 @@ namespace Prediction
         public SafeEventDispatcher<EntityProcessingError> onClientStateSendError = new();
         public SafeEventDispatcher<bool> resimulation = new();
         public SafeEventDispatcher<bool> resimulationStep = new();
-        public SafeEventDispatcher<uint> onTickFrozen = new();
         public SafeEventDispatcher<uint> onSnapToServer = new();
     }
 }

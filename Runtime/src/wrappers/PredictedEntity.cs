@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Milorad Liviu Felix
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
-﻿using System;
+using System;
 using UnityEngine;
 
 namespace Prediction.Wrappers
