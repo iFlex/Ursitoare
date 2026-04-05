@@ -188,7 +188,7 @@ namespace Prediction.Components.Controllers
             }
 		}
 		
-		public static bool LOG_INPUT_QUEUE_SIZE = true;
+		public static bool LOG_INPUT_QUEUE_SIZE = false;
         public uint ServerSimulationTick()
         {
 			if (LOG_INPUT_QUEUE_SIZE)
