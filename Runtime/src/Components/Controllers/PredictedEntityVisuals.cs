@@ -12,6 +12,8 @@ namespace Prediction.Components.Controllers
         //TODO: larger smooth window for followers!
         
         public static bool SHOW_DBG = false;
+        public static bool DETACH_VISUALS = true;
+        
         [SerializeField] public GameObject visualsEntity;
         [SerializeField] private GameObject serverGhostPrefab;
         [SerializeField] private GameObject clientGhostPrefab;
@@ -46,8 +48,11 @@ namespace Prediction.Components.Controllers
             clientPredictedEntity.onReset.AddEventListener(OnShouldReset);
             //TODO: what? why artifficial delay?
             currentTimeStep -= artifficialDelay;
-            
-            DetachVisuals();
+
+            if (DETACH_VISUALS)
+            {
+                DetachVisuals();
+            }
             interpolationProvider.SetInterpolationTarget(visualsEntity.transform);
             
             if (serverGhostPrefab)
@@ -68,7 +73,10 @@ namespace Prediction.Components.Controllers
         //NOTE: you should detach visuals even on server if they have colliders on them, because those colliders will behave differently on client vs server if one is detached and one is not.
         public void SetServerPredictedEntity(Transform serverPredictedEntity)
         {
-            DetachVisuals();
+            if (DETACH_VISUALS)
+            {
+                DetachVisuals();
+            }
             serverEntityTransform = serverPredictedEntity;
         }
 
