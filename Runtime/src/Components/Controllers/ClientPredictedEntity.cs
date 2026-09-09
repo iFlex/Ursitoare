@@ -53,6 +53,7 @@ namespace Prediction.Components.Controllers
         
         //NOTE: if you disable prediction, you have to move the object manually
         public bool predictionDisabled = false;
+        public bool predictAsFollower = false;
         
         //This is used exclusively in follower mode (predicted entity not controlled by user).
         public bool isControlledLocally { get; private set; }
@@ -186,8 +187,14 @@ namespace Prediction.Components.Controllers
                     PhysicsStateRecord latestServerState = serverStateBuffer.GetEnd();
                     if (latestServerState != null)
                     {
-                        isCurrentStateSpeculative = false;
-                        SnapTo(latestServerState);
+                        if (!predictAsFollower)
+                        {
+                            //If not predicting a follower, then just snap whenever new position data available.
+                            //otherwise let the resimulation do the snapping
+                            isCurrentStateSpeculative = false;
+                            SnapTo(latestServerState);
+                        }
+                        
                         if (APPLY_SERVER_INPUT_TO_FOLLOWERS)
                         {
                             PredictionInputRecord input = latestServerState.input;
@@ -209,7 +216,6 @@ namespace Prediction.Components.Controllers
                         if (DEBUG)
                             Debug.Log($"[ClientPredictedEntiy][ClientFollowerSimulationTick][MISSING] entityId:{id} Missing end of buffer...");
                     }
-                    
                     //NOTE: by design we don't call LoadInput again in the absence of a server tick, expect each input driven component to keep state and use it in the absence of new input.
                 }
             }
@@ -472,10 +478,19 @@ namespace Prediction.Components.Controllers
         
         void PreResimulationFollowerStep(uint tickId)
         {
+            resimulationStep.Dispatch(true);
+            
+            if (APPLY_SERVER_INPUT_TO_FOLLOWERS)
+            {
+                PhysicsStateRecord serverState = serverStateBuffer.Get(tickId);
+                if (serverState is { input: not null })
+                {
+                    LoadInput(serverState.input);
+                }   
+            }
+            ApplyForces();
             resimTicks++;
             resimTicksAsFollower++;
-            resimulationStep.Dispatch(true);
-            //TODO: do we need anything here? apply input from server?
         }
         
         public void PostResimulationStep(uint tickId)
@@ -491,7 +506,10 @@ namespace Prediction.Components.Controllers
                 prevResimState.From(record);
             }
             
+            //TODO: should sample component state + pop physics state be grouped somehow so that they are called together always?
             PopulatePhysicsStateRecord(tickId, record);
+            SampleComponentState(record);
+            
             resimulationStep.Dispatch(false);
 
             if (isControlledLocally && TRACK_RESIM_DISCREPANCIES && resimCounter > 1)
@@ -529,7 +547,8 @@ namespace Prediction.Components.Controllers
             localHistoryStartTickId = 0;
             localHistoryEndTickId = 0;
             localHistoryTicksProcessed = 0;
-
+            predictAsFollower = false;
+            
             localInputBuffer.Clear();
             localStateBuffer.Clear();
             serverStateBuffer.Clear();

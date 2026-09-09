@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using Prediction.Components.Controllers;
 using Sector0.Events;
 using Prediction.Data;
@@ -26,7 +27,8 @@ namespace Prediction
         public static bool LOG_PRE_SIM_STATE = false;
         public static bool PREDICTION_ENABLED = true;
         public static int INVALID_CONNECTION_ID = -1;
-        
+        public static float RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 0;
+
         //TODO: guard singleton
         public static PredictionManager Instance;
         //TODO: validate presence of all static providers
@@ -507,11 +509,38 @@ namespace Prediction
             }
             return PredictionDecision.NOOP;
         }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        bool IsFollower(ClientPredictedEntity entity)
+        {
+            return entity.id != localEntityId;
+        }
 
         bool ShouldIgnoreResimulationDecision(ClientPredictedEntity entity)
         {
-            return (IGNORE_NON_AUTH_RESIM_DECISIONS && entity.id != localEntityId) ||
-                   (IGNORE_CONTROLLABLE_FOLLOWER_DECISIONS && entity.IsControllable() && entity.id != localEntityId);
+            //TODO: clarify first case. what is it for?
+            return (IGNORE_NON_AUTH_RESIM_DECISIONS && IsFollower(entity)) ||
+                   (IGNORE_CONTROLLABLE_FOLLOWER_DECISIONS && entity.IsControllable() && IsFollower(entity)) ||
+                   (IsFollower(entity) && !entity.predictAsFollower);
+        }
+        
+		void ConfigureFollowerResimulation(ClientPredictedEntity ent)
+        {
+            if (localEntity == null)
+            {
+                //No local entity - means we can just have everyone follow the server.
+                ent.predictAsFollower = false;
+                return;
+            }
+
+            if (RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD == 0)
+            {
+                ent.predictAsFollower = true;
+                return;
+            }
+            
+            float sqrDistance = (localEntity.gameObject.transform.position - ent.gameObject.transform.position).sqrMagnitude;
+            ent.predictAsFollower = sqrDistance < RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD;
         }
         
         //TODO: package private
@@ -526,6 +555,7 @@ namespace Prediction
             
             foreach (KeyValuePair<uint, ClientPredictedEntity> pair in _clientEntities)
             {
+				ConfigureFollowerResimulation(pair.Value);
                 PredictionDecision decision =
                     pair.Value.GetPredictionDecision(tickId, out uint localFromTick);
                 if (ShouldIgnoreResimulationDecision(pair.Value))
@@ -541,6 +571,7 @@ namespace Prediction
                 }
                 if (decision == PredictionDecision.RESIMULATE)
                 {
+                    //TODO: use IsFollower check
                     if (pair.Value == localEntity)
                     {
                         localAsksResimulation = true;
