@@ -239,8 +239,6 @@ namespace Prediction.Components.Controllers
             return inputData;
         }
         
-        void SampleInput(PredictionInputRecord inputRecord)
-        {
         public void SamplePhysicsState(uint tickId)
         {
             if (tickId > localHistoryEndTickId)
