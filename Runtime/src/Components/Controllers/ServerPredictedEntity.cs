@@ -25,7 +25,7 @@ namespace Prediction.Components.Controllers
         //that means the server has fallen behind time wise. So we should snap ahead to the latest client state.
         public static int CATCHUP_SECTIONS = 3;
         public static bool IGNORE_OLD_INPUT = true;
-
+        public static bool BROADCAST_INPUTS = true;
         
         public GameObject gameObject;
         private PhysicsStateRecord serverStateRecord;
@@ -166,7 +166,7 @@ namespace Prediction.Components.Controllers
 		void LoadValidateApplyInput(uint qTickId, PredictionInputRecord nextInput) {
 			if (nextInput == null)
 	            return;
-
+            
             if (LOG_CLIENT_INUPTS)
             {
                 Debug.Log($"[SV][SIMULATION][INPUT] i:{id} t:{qTickId} input:{nextInput}");
@@ -256,12 +256,23 @@ namespace Prediction.Components.Controllers
             serverTickId = svTid;
             preSampleState.Dispatch(true);
             PopulatePhysicsStateRecord(GetClientTickId(), serverStateRecord);
-            serverStateRecord.input = inputQueue.Remove(GetClientTickId());
+            if (BROADCAST_INPUTS)
+            {
+                if (serverStateRecord.input == null)
+                {
+                    //LAZY ALLOC
+                    serverStateRecord.input = new PredictionInputRecord(totalFloatInputs, totalBinaryInputs);
+                }
+                SampleInput(serverStateRecord.input);
+            }
             SampleComponentState(serverStateRecord);
             stateSampled.Dispatch(true);
             
-			if (DEBUG)
-                Debug.Log($"[ServerPredictedEntity][SamplePhysicsState]({id}) input:{serverStateRecord}");
+            //TODO: we keep this queue removal because i'm not sure it serves a purpose. check if it does and remove;
+            inputQueue.Remove(GetClientTickId());
+            
+            if (DEBUG)
+                Debug.Log($"[ServerPredictedEntity][SamplePhysicsState]({id}) input:{serverStateRecord} input:{serverStateRecord.input}");
             
             if (SERVER_LOG_VELOCITIES)
             {

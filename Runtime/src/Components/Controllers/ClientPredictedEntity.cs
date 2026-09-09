@@ -241,18 +241,6 @@ namespace Prediction.Components.Controllers
         
         void SampleInput(PredictionInputRecord inputRecord)
         {
-            inputRecord.WriteReset();
-            //NOTE: sampling in the exact same order all the time on both server and client is critical!
-            for (int i = 0; i < controllablePredictionContributors.Length; ++i)
-            {
-                //NOTE: this samples the input of each component and stores it in the inputRecord as a side effect.
-                //TODO: what about write skips?
-                //TODO: what about adding & removing components?
-                //TODO: what about new components? how can we keep it backward compatible?
-                controllablePredictionContributors[i].SampleInput(inputRecord);
-            }
-        }
-        
         public void SamplePhysicsState(uint tickId)
         {
             if (tickId > localHistoryEndTickId)

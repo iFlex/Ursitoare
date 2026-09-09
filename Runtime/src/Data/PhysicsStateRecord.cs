@@ -58,7 +58,13 @@ namespace Prediction.Data
             rotation = record.rotation;
             velocity = record.velocity;
             angularVelocity = record.angularVelocity;
-            if (input != null && record.input != null)
+
+            if (input == null)
+            {
+                //TODO: configure if this is an accepted risk. using the instance of the passed in record is shallow copy not deep copy like this intends to be
+                input = record.input;
+            }
+            else if (record.input != null)
             {
                 input.From(record.input);
             }

@@ -876,7 +876,9 @@ namespace Prediction
                 ServerPredictedEntity entity = pair.Key;
                 uint id = pair.Value;
                 PhysicsStateRecord state = entity.SamplePhysicsState(tickId);
-                if (id == localEntityId)
+                //NOTE: the host's own entity is simulated by the client half, so its input never reaches the
+                //server entity's queue. Every other entity carries the input the server applied for this tick.
+                if (id == localEntityId && localEntity != null)
                 {
                     state.input = localEntity.GetLastInput();
                 }
