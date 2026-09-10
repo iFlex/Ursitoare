@@ -34,6 +34,7 @@ namespace Prediction
         //TODO: validate presence of all static providers
         public static Func<VisualsInterpolationsProvider> INTERPOLATION_PROVIDER = () => new MovingAverageInterpolator();
         public static SingleSnapshotInstanceResimChecker SNAPSHOT_INSTANCE_RESIM_CHECKER = new SimpleConfigurableResimulationDecider();
+        public static SingleSnapshotInstanceResimChecker FOLLOWER_INSTANCE_RESIM_CHECKER = new SimpleConfigurableResimulationDecider();
         public static PhysicsController PHYSICS_CONTROLLER = new RewindablePhysicsController();
         //TODO: do we still need this?
         public static Func<double> ROUND_TRIP_GETTER;
@@ -287,6 +288,7 @@ namespace Prediction
             _predictedEntitiesGO.Add(entity.gameObject);
             _predictedEntities.Add(entity.gameObject.GetComponent<PredictedEntity>());
             entity.SetSingleStateEligibilityCheckHandler(SNAPSHOT_INSTANCE_RESIM_CHECKER.Check);
+            entity.SetFollowerSingleStateEligibilityCheckHandler(FOLLOWER_INSTANCE_RESIM_CHECKER.Check);
             
             if (autoTrackRigidbodies)
             {
