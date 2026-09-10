@@ -35,8 +35,23 @@ namespace Prediction.Components.Controllers
             private set; 
         }
         
+        // entityId, tickId, localHist, serverHist
+        public Func<uint, uint, RingBuffer<PhysicsStateRecord>, TickIndexedBuffer<PhysicsStateRecord>, PredictionDecision>
+            followerResimulationEligibilityCheckHook
+        {
+            get; 
+            private set; 
+        }
+        
         // entityId, tickId, localSnapshot, serverSnapshot
         public Func<uint, uint, PhysicsStateRecord, PhysicsStateRecord, PredictionDecision> singleStateResimulationEligibilityHook
+        {
+            get;
+            private set;
+        }
+        
+        // entityId, tickId, localSnapshot, serverSnapshot
+        public Func<uint, uint, PhysicsStateRecord, PhysicsStateRecord, PredictionDecision> followerSingleStateResimulationEligibilityHook
         {
             get;
             private set;
@@ -131,6 +146,18 @@ namespace Prediction.Components.Controllers
         {
             resimulationEligibilityCheckHook = _defaultResimulationEligibilityCheck;
             singleStateResimulationEligibilityHook = handler;
+        }
+        
+        public void SetCustomFollowerEligibilityCheckHandler(Func<uint, uint, RingBuffer<PhysicsStateRecord>, TickIndexedBuffer<PhysicsStateRecord>, PredictionDecision> handler)
+        {
+            followerResimulationEligibilityCheckHook = handler;
+            followerSingleStateResimulationEligibilityHook = null;
+        }
+
+        public void SetFollowerSingleStateEligibilityCheckHandler(Func<uint, uint, PhysicsStateRecord, PhysicsStateRecord, PredictionDecision> handler)
+        {
+            followerResimulationEligibilityCheckHook = _defaultFollowerResimulationEligibilityCheck;
+            followerSingleStateResimulationEligibilityHook = handler;
         }
 
         public PredictionInputRecord ClientSimulationTick(uint tickId)
@@ -338,9 +365,19 @@ namespace Prediction.Components.Controllers
             {
                 return PredictionDecision.SIMULATION_FREEZE;
             }
-            return resimulationEligibilityCheckHook(id, serverState.tickId, localStateBuffer, serverStateBuffer);
+
+            return RunPredictionDecisionHook(id, serverState.tickId, localStateBuffer, serverStateBuffer);
         }
 
+        PredictionDecision RunPredictionDecisionHook(uint id, uint tickId, RingBuffer<PhysicsStateRecord> lsb, TickIndexedBuffer<PhysicsStateRecord> ssb)
+        {
+            if (!isControlledLocally && followerResimulationEligibilityCheckHook != null)
+            {
+                return followerResimulationEligibilityCheckHook(id, tickId, lsb, ssb);
+            }
+            return resimulationEligibilityCheckHook(id, tickId, lsb, ssb);
+        }
+        
         bool IsFromTickBeforeLocalHistory(uint fromId, uint ltid)
         {
             //Check if the intended rewind target is outside of the stored history
@@ -387,6 +424,15 @@ namespace Prediction.Components.Controllers
             PhysicsStateRecord localState = clientStates.Get((int)tickId);
             PhysicsStateRecord serverState = serverStates.Get(tickId);
             return singleStateResimulationEligibilityHook.Invoke(entityId, tickId, localState, serverState);
+        }
+        
+        PredictionDecision _defaultFollowerResimulationEligibilityCheck(uint entityId, uint tickId, RingBuffer<PhysicsStateRecord> clientStates,
+            TickIndexedBuffer<PhysicsStateRecord> serverStates)
+        {
+            //TODO: ensure correct conversion from uint tick to index
+            PhysicsStateRecord localState = clientStates.Get((int)tickId);
+            PhysicsStateRecord serverState = serverStates.Get(tickId);
+            return followerSingleStateResimulationEligibilityHook.Invoke(entityId, tickId, localState, serverState);
         }
 
         public void SnapToServerIfExists(uint tickId)
