@@ -201,6 +201,82 @@ namespace Prediction.Tests
         }
         
         [Test]
+        public void CheckUpdates_EveryConnectionReceivesTheInputOfEveryEntity()
+        {
+            manager.useServerWorldStateMessage = false;
+            List<StateUpdate> sentStates = new List<StateUpdate>();
+            manager.serverStateSender = (connId, entityId, state) =>
+            {
+                StateUpdate su = new StateUpdate();
+                su.connId = connId;
+                su.entityId = entityId;
+                //NOTE: keeping the record itself, the way an integration serialises it on the spot.
+                su.state = state;
+                sentStates.Add(su);
+            };
+
+            PredictionInputRecord pir1 = new PredictionInputRecord(3, 0);
+            pir1.WriteReset();
+            pir1.WriteNextScalar(1);
+            pir1.WriteNextScalar(0);
+            pir1.WriteNextScalar(0);
+
+            PredictionInputRecord pir2 = new PredictionInputRecord(3, 0);
+            pir2.WriteReset();
+            pir2.WriteNextScalar(-1);
+            pir2.WriteNextScalar(0);
+            pir2.WriteNextScalar(0);
+
+            //Connection 1 drives entity 1, connection 2 drives entity 2, connection 3 drives nothing.
+            manager.OnClientStateReceived(1, 10, pir1);
+            manager.OnClientStateReceived(2, 15, pir2);
+            manager.Tick();
+
+            Assert.AreEqual(6, sentStates.Count);
+            foreach (int connId in new[] { 1, 2, 3 })
+            {
+                //Every connection gets the input of both entities, including the ones it does not own.
+                Assert.AreSame(pir1, StateUpdate.FindBy(connId, 1, sentStates).state.input);
+                Assert.AreSame(pir2, StateUpdate.FindBy(connId, 2, sentStates).state.input);
+            }
+        }
+
+        [Test]
+        public void CheckWorldState_CarriesTheInputOfEveryEntity()
+        {
+            manager.useServerWorldStateMessage = true;
+            //NOTE: the batch buffer is sized while entities register, so re-register them after the mode switch.
+            manager.AddPredictedEntity(serverEntity1);
+            manager.AddPredictedEntity(serverEntity2);
+
+            List<WorldStateRecord> sentWorldStates = new List<WorldStateRecord>();
+            manager.serverWorldStateSender = (connId, worldState) => { sentWorldStates.Add(worldState); };
+
+            PredictionInputRecord pir1 = new PredictionInputRecord(3, 0);
+            pir1.WriteReset();
+            pir1.WriteNextScalar(1);
+            pir1.WriteNextScalar(0);
+            pir1.WriteNextScalar(0);
+
+            manager.OnClientStateReceived(1, 10, pir1);
+            manager.Tick();
+
+            //One batch per connection, each holding a state per entity.
+            Assert.AreEqual(3, sentWorldStates.Count);
+            foreach (WorldStateRecord worldState in sentWorldStates)
+            {
+                Assert.AreEqual(2, worldState.fill);
+                for (int i = 0; i < worldState.fill; i++)
+                {
+                    if (worldState.entityIDs[i] == 1)
+                    {
+                        Assert.AreSame(pir1, worldState.states[i].input);
+                    }
+                }
+            }
+        }
+
+        [Test]
         public void TestOwnershipSetAndUnset()
         {
             manager.SetEntityOwner(serverEntity1, 3);

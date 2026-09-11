@@ -69,6 +69,7 @@ namespace Prediction.Components.Controllers
         //NOTE: if you disable prediction, you have to move the object manually
         public bool predictionDisabled = false;
         public bool predictAsFollower = false;
+        public bool usePreciseResimChecker = false;
         
         //This is used exclusively in follower mode (predicted entity not controlled by user).
         public bool isControlledLocally { get; private set; }
@@ -371,7 +372,7 @@ namespace Prediction.Components.Controllers
 
         PredictionDecision RunPredictionDecisionHook(uint id, uint tickId, RingBuffer<PhysicsStateRecord> lsb, TickIndexedBuffer<PhysicsStateRecord> ssb)
         {
-            if (!isControlledLocally && followerResimulationEligibilityCheckHook != null)
+            if (!isControlledLocally && !usePreciseResimChecker && followerResimulationEligibilityCheckHook != null)
             {
                 return followerResimulationEligibilityCheckHook(id, tickId, lsb, ssb);
             }
@@ -580,6 +581,7 @@ namespace Prediction.Components.Controllers
             localHistoryEndTickId = 0;
             localHistoryTicksProcessed = 0;
             predictAsFollower = false;
+            usePreciseResimChecker = false;
             
             localInputBuffer.Clear();
             localStateBuffer.Clear();
