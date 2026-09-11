@@ -10,6 +10,7 @@ using Prediction.Data;
 using Prediction.Interpolation;
 using Prediction.Resimulation.Detection;
 using Prediction.Simulation;
+using Prediction.Stats;
 using UnityEngine;
 
 namespace Prediction
@@ -27,8 +28,11 @@ namespace Prediction
         public static bool LOG_PRE_SIM_STATE = false;
         public static bool PREDICTION_ENABLED = true;
         public static int INVALID_CONNECTION_ID = -1;
+        //FUDO: we might not need the RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD, it gives some good flexibilty for now.
         public static float RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 0;
-
+        public static float RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 0;
+        public static bool TRACK_TIMING_STATS = true;
+        
         //TODO: guard singleton
         public static PredictionManager Instance;
         //TODO: validate presence of all static providers
@@ -84,6 +88,8 @@ namespace Prediction
         public uint maxTickResimulationCount = 1;
         private Dictionary<uint, uint> tickResimCounter = new Dictionary<uint, uint>();
         
+        public readonly PredictionBudgetTracker timingStats;
+        
         public uint totalResimulationsDueToAuthority = 0;
         public uint totalResimulationsDueToFollowers = 0;
         public uint totalResimulationsDueToBoth = 0;
@@ -100,6 +106,10 @@ namespace Prediction
         
         public PredictionManager()
         {
+            if (TRACK_TIMING_STATS)
+            {
+               timingStats = new PredictionBudgetTracker();
+            }
             Instance = this;
         }
 
@@ -422,6 +432,7 @@ namespace Prediction
             if (!setup) 
                 return;
             
+            timingStats?.BeginTick();
             ticksSinceResim++;
             resimulatedThisTick = false;
             shouldResimThisTick = false;
@@ -454,6 +465,8 @@ namespace Prediction
             tickDuration = System.Diagnostics.Stopwatch.GetTimestamp() - tickDuration;
             
             onPostTick.Dispatch(tickId);
+
+            timingStats?.EndTick(resimulatedThisTick);
             
             if (LOG_TIMING || DEBUG) {
                 Debug.Log($"[PredictionManager][Tick] t:{tickId} deltaPrevTick:{interTickDuration} td:{tickDuration} pre:{preSimDuration} post:{postSimDuration} sim:{(tickDuration - preSimDuration - postSimDuration)} resim:{(resimulatedThisTick ? "1" : "0")} freq:{System.Diagnostics.Stopwatch.Frequency} shouldResim:{(shouldResimThisTick ? "1" : "0")}");
@@ -487,6 +500,7 @@ namespace Prediction
             _predictedEntitiesGO.Clear();
             tickResimCounter.Clear();
             PHYSICS_CONTROLLER.Clear();
+            timingStats?.Reset();
         }
 
         int PredictionDecisionToInt(PredictionDecision decision)
@@ -532,16 +546,20 @@ namespace Prediction
             {
                 //No local entity - means we can just have everyone follow the server.
                 ent.predictAsFollower = false;
+                ent.usePreciseResimChecker = false;
                 return;
             }
-
+            
+            float sqrDistance = (localEntity.gameObject.transform.position - ent.gameObject.transform.position).sqrMagnitude;
+            if (RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD > 0)
+            {
+                ent.usePreciseResimChecker = sqrDistance < RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD;
+            }
             if (RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD == 0)
             {
                 ent.predictAsFollower = true;
                 return;
             }
-            
-            float sqrDistance = (localEntity.gameObject.transform.position - ent.gameObject.transform.position).sqrMagnitude;
             ent.predictAsFollower = sqrDistance < RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD;
         }
         
