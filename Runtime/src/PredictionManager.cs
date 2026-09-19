@@ -39,6 +39,7 @@ namespace Prediction
         public static Func<VisualsInterpolationsProvider> INTERPOLATION_PROVIDER = () => new MovingAverageInterpolator();
         public static SingleSnapshotInstanceResimChecker SNAPSHOT_INSTANCE_RESIM_CHECKER = new SimpleConfigurableResimulationDecider();
         public static SingleSnapshotInstanceResimChecker FOLLOWER_INSTANCE_RESIM_CHECKER = new SimpleConfigurableResimulationDecider();
+        public static Func<Timer> TIMER_PROVIDER = () => new DefaultTimer();
         public static PhysicsController PHYSICS_CONTROLLER = new RewindablePhysicsController();
         //TODO: do we still need this?
         public static Func<double> ROUND_TRIP_GETTER;
@@ -88,8 +89,6 @@ namespace Prediction
         public uint maxTickResimulationCount = 1;
         private Dictionary<uint, uint> tickResimCounter = new Dictionary<uint, uint>();
         
-        public readonly PredictionBudgetTracker timingStats;
-        
         public uint totalResimulationsDueToAuthority = 0;
         public uint totalResimulationsDueToFollowers = 0;
         public uint totalResimulationsDueToBoth = 0;
@@ -103,14 +102,16 @@ namespace Prediction
         public uint totalResimulationsTriggeredByFollowers = 0;
         public uint totalResimulationsTriggeredByBoth = 0;
         public uint totalResimulationsSkipped = 0;
+
+        protected Timer _tickTimer;
+        protected Timer _resimTimer;
         
         public PredictionManager()
         {
-            if (TRACK_TIMING_STATS)
-            {
-               timingStats = new PredictionBudgetTracker();
-            }
             Instance = this;
+            
+            _tickTimer = TIMER_PROVIDER();
+            _resimTimer = TIMER_PROVIDER();
         }
 
         public void Setup(bool isServer, bool isClient)
@@ -420,6 +421,9 @@ namespace Prediction
         }
         
         bool resimulatedThisTick = false;
+        private float lastResimDuration = 0;
+        private uint lastResimmedTicks = 0;
+        
 		long lastTickTimestamp = 0;
 		long interTickDuration = 0;
         long tickDuration = 0;
@@ -432,10 +436,13 @@ namespace Prediction
             if (!setup) 
                 return;
             
-            timingStats?.BeginTick();
+            _tickTimer.Stat();
+            
             ticksSinceResim++;
             resimulatedThisTick = false;
             shouldResimThisTick = false;
+            lastResimDuration = 0;
+            lastResimmedTicks = 0;
             interTickDuration = System.Diagnostics.Stopwatch.GetTimestamp() - lastTickTimestamp;
 			lastTickTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
 
@@ -465,8 +472,14 @@ namespace Prediction
             tickDuration = System.Diagnostics.Stopwatch.GetTimestamp() - tickDuration;
             
             onPostTick.Dispatch(tickId);
-
-            timingStats?.EndTick(resimulatedThisTick);
+            
+            TickStat tickStat = new TickStat();
+            tickStat.tickId = tickId;
+            tickStat.duration = _tickTimer.Stop();
+            tickStat.didResimulate = resimulatedThisTick;
+            tickStat.resimDuration = lastResimDuration;
+            tickStat.resimTicks = lastResimmedTicks;
+            onTickStat.Dispatch(tickStat);
             
             if (LOG_TIMING || DEBUG) {
                 Debug.Log($"[PredictionManager][Tick] t:{tickId} deltaPrevTick:{interTickDuration} td:{tickDuration} pre:{preSimDuration} post:{postSimDuration} sim:{(tickDuration - preSimDuration - postSimDuration)} resim:{(resimulatedThisTick ? "1" : "0")} freq:{System.Diagnostics.Stopwatch.Frequency} shouldResim:{(shouldResimThisTick ? "1" : "0")}");
@@ -500,7 +513,6 @@ namespace Prediction
             _predictedEntitiesGO.Clear();
             tickResimCounter.Clear();
             PHYSICS_CONTROLLER.Clear();
-            timingStats?.Reset();
         }
 
         int PredictionDecisionToInt(PredictionDecision decision)
@@ -689,6 +701,8 @@ namespace Prediction
 
             ticksSinceResim = 0;
             resimulatedThisTick = true;
+            _resimTimer.Stat();
+            lastResimmedTicks = rewind;
             
             //TODO: decide what to do with these hooks...
             PHYSICS_CONTROLLER.BeforeResimulate(null);
@@ -744,6 +758,7 @@ namespace Prediction
             resimulation.Dispatch(false);
             PHYSICS_CONTROLLER.AfterResimulate(null);
             resimulating = false;
+            lastResimDuration = _resimTimer.Stop();
         }
         
         void MarkResimulatedTick(uint tid)
@@ -1101,11 +1116,21 @@ namespace Prediction
             return totalResimulationSteps / tickId;
         }
 
+        public struct TickStat
+        {
+            public uint tickId;
+            public float duration;
+            public float resimDuration;
+            public bool didResimulate;
+            public uint resimTicks;
+        }
+        
         public SafeEventDispatcher<uint> onPreTick = new();
         public SafeEventDispatcher<uint> onPreResimTick = new();
         public SafeEventDispatcher<uint> onPostTick = new();
         public SafeEventDispatcher<uint> onPostResimTick = new();
-        
+        public SafeEventDispatcher<TickStat> onTickStat = new();
+            
         public SafeEventDispatcher<ServerUpdateSendError> onServerStateSendError = new();
         public SafeEventDispatcher<EntityProcessingError> onClientStateSendError = new();
         public SafeEventDispatcher<bool> resimulation = new();

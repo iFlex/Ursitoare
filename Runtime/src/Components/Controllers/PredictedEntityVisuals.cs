@@ -3,6 +3,7 @@
 
 using Prediction.Data;
 using Prediction.Interpolation;
+using Sector0.Events;
 using UnityEngine;
 
 namespace Prediction.Components.Controllers
@@ -13,6 +14,8 @@ namespace Prediction.Components.Controllers
         
         public static bool SHOW_DBG = false;
         public static bool DETACH_VISUALS = true;
+        public static float LARGE_POS_JUMP = 0.15f;
+        public static float LARGE_ANGLE_JUMP = 2f;
         
         [SerializeField] public GameObject visualsEntity;
         [SerializeField] private GameObject serverGhostPrefab;
@@ -121,11 +124,33 @@ namespace Prediction.Components.Controllers
             {
                 if (clientPredictedEntity != null)
                 {
+                    Vector3 beforePos = visualsEntity.transform.position;
+                    Quaternion rotBefore = visualsEntity.transform.rotation;
+                    
                     interpolationProvider.Update(Time.deltaTime, PredictionManager.Instance.tickId);
                     interpolationDistance = (visualsEntity.transform.position - logicalEntityTransform.position).magnitude;
+
+                    Vector3 posDiff = visualsEntity.transform.position - beforePos;
+                    Quaternion rotDiff = visualsEntity.transform.rotation * Quaternion.Inverse(rotBefore);
+                    if (posDiff.magnitude > LARGE_POS_JUMP || 
+                        Mathf.Abs(rotDiff.eulerAngles.x) > LARGE_ANGLE_JUMP || 
+                        Mathf.Abs(rotDiff.eulerAngles.y) > LARGE_ANGLE_JUMP || 
+                        Mathf.Abs(rotDiff.eulerAngles.z) > LARGE_ANGLE_JUMP)
+                    {
+                        TransformJump jump = new TransformJump();
+                        jump.positionDiff = posDiff;
+                        jump.rotationDiff = rotDiff;
+                        onLargeTransformJump.Dispatch(jump);
+                        
+                        GlobalTransformJump gjump = new GlobalTransformJump();
+                        gjump.entity = gameObject;
+                        gjump.jump = jump;
+                        onLargeTransformJumpGlobal.Dispatch(gjump);
+                    }
                 }
                 else if (serverEntityTransform)
                 {
+                    //TODO: use transform or visualsEntity.transform? wat?
                     transform.position = serverEntityTransform.position;
                     transform.rotation = serverEntityTransform.rotation;
                 }
@@ -151,5 +176,20 @@ namespace Prediction.Components.Controllers
         {
             return interpolationDistance;
         }
+
+        public struct TransformJump
+        {
+            public Vector3 positionDiff;
+            public Quaternion rotationDiff;
+        }
+
+        public struct GlobalTransformJump
+        {
+            public GameObject entity;
+            public TransformJump jump;
+        }
+        
+        public SafeEventDispatcher<TransformJump> onLargeTransformJump = new();
+        public static SafeEventDispatcher<GlobalTransformJump> onLargeTransformJumpGlobal = new();
     }
 }
