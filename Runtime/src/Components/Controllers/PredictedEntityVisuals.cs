@@ -14,8 +14,9 @@ namespace Prediction.Components.Controllers
         
         public static bool SHOW_DBG = false;
         public static bool DETACH_VISUALS = true;
-        public static float LARGE_POS_JUMP = 0.15f;
-        public static float LARGE_ANGLE_JUMP = 2f;
+        //TODO: differentiate jumps in the direction of travel versus sideways
+        public static float LARGE_POS_JUMP = 0.35f;
+        public static float LARGE_ANGLE_JUMP = 2.5f;
         
         [SerializeField] public GameObject visualsEntity;
         [SerializeField] private GameObject serverGhostPrefab;
@@ -133,9 +134,9 @@ namespace Prediction.Components.Controllers
                     Vector3 posDiff = visualsEntity.transform.position - beforePos;
                     Quaternion rotDiff = visualsEntity.transform.rotation * Quaternion.Inverse(rotBefore);
                     if (posDiff.magnitude > LARGE_POS_JUMP || 
-                        Mathf.Abs(rotDiff.eulerAngles.x) > LARGE_ANGLE_JUMP || 
-                        Mathf.Abs(rotDiff.eulerAngles.y) > LARGE_ANGLE_JUMP || 
-                        Mathf.Abs(rotDiff.eulerAngles.z) > LARGE_ANGLE_JUMP)
+                        ClosestAngleRot(Mathf.Abs(rotDiff.eulerAngles.x)) > LARGE_ANGLE_JUMP || 
+                        ClosestAngleRot(Mathf.Abs(rotDiff.eulerAngles.y)) > LARGE_ANGLE_JUMP || 
+                        ClosestAngleRot(Mathf.Abs(rotDiff.eulerAngles.z)) > LARGE_ANGLE_JUMP)
                     {
                         TransformJump jump = new TransformJump();
                         jump.positionDiff = posDiff;
@@ -157,6 +158,11 @@ namespace Prediction.Components.Controllers
             }
         }
 
+        float ClosestAngleRot(float angle)
+        {
+            return Mathf.Min(angle, 360 - angle);
+        }
+        
         void OnShouldReset(bool ign)
         {
             Reset();

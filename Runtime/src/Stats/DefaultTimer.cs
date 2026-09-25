@@ -1,22 +1,26 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
+using UnityEngine;
 
 namespace Prediction.Stats
 {
     public class DefaultTimer : Timer
     {
-        private Stopwatch _stopwatch = new Stopwatch();
+        //private long startTime;
+        private double timeSinceStart;
         
-        public void Stat()
+        public void Start()
         {
-            _stopwatch.Start();
+            //startTime = Stopwatch.GetTimestamp();
+            timeSinceStart = Time.realtimeSinceStartupAsDouble;
         }
 
-        public float Stop()
+        public double Stop()
         {
-            _stopwatch.Stop();
-            float dur = _stopwatch.ElapsedMilliseconds / 1000f;
-            _stopwatch.Reset();
-            return dur;
+            //TimeSpan ts = new TimeSpan(Stopwatch.GetTimestamp() - startTime);
+            //return (float)ts.TotalMilliseconds / 1000f;
+            
+            return Time.realtimeSinceStartupAsDouble - timeSinceStart;
         }
     }
 }

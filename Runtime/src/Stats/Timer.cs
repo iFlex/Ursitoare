@@ -2,9 +2,9 @@
 {
     public interface Timer
     {
-        public void Stat();
+        public void Start();
         
         //returns seconds elapsed
-        public float Stop();
+        public double Stop();
     }
 }

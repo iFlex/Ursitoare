@@ -11,6 +11,7 @@ using Prediction.Interpolation;
 using Prediction.Resimulation.Detection;
 using Prediction.Simulation;
 using Prediction.Stats;
+using Prediction.Utils;
 using UnityEngine;
 
 namespace Prediction
@@ -32,6 +33,10 @@ namespace Prediction
         public static float RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 0;
         public static float RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 0;
         public static bool TRACK_TIMING_STATS = true;
+        public static int MISSING_PACKETS_BUFFER_SIZE = 10;
+        public static bool TRACK_PACKET_LOSS = true;
+        
+        public static int CLIENT_RTT_MEASUREMENTS_BUFFER_SIZE = 20;
         
         //TODO: guard singleton
         public static PredictionManager Instance;
@@ -84,6 +89,11 @@ namespace Prediction
         public Func<IEnumerable<int>> connectionsIterator;
         private WorldStateRecord _worldStateRecord = new WorldStateRecord();
         
+        protected uint lastAckTickId = 0;
+        private TickIndexedBuffer<bool> missedTicksBuffer = new TickIndexedBuffer<bool>(MISSING_PACKETS_BUFFER_SIZE);
+
+        protected uint clientLastReceivedTickId = 0;
+        
         //NOTE: either use protectFromOversimulation or TRUST_ALREADY_RESIMULATED_TICKS, no both
         public bool protectFromOversimulation = true;
         public uint maxTickResimulationCount = 1;
@@ -104,14 +114,28 @@ namespace Prediction
         public uint totalResimulationsSkipped = 0;
 
         protected Timer _tickTimer;
+        protected Timer _interTickTimer;
         protected Timer _resimTimer;
+        protected Timer _serverRecvTimer;
+        
+        public double lastServerRecvIntervalDuration = 0;
+        public double lastClientTickRTT = 0;
+        public double lastInterTickDuration = 0;
+        public double lastTickDuration = 0;
+        
+        protected TickIndexedBuffer<TickRttRecord> clientTickRTTBuffer;
         
         public PredictionManager()
         {
             Instance = this;
             
             _tickTimer = TIMER_PROVIDER();
+            _interTickTimer = TIMER_PROVIDER();
             _resimTimer = TIMER_PROVIDER();
+            _serverRecvTimer = TIMER_PROVIDER();
+            
+            clientTickRTTBuffer = new TickIndexedBuffer<TickRttRecord>(CLIENT_RTT_MEASUREMENTS_BUFFER_SIZE);
+            clientTickRTTBuffer.emptyValue = new TickRttRecord();
         }
 
         public void Setup(bool isServer, bool isClient)
@@ -421,7 +445,7 @@ namespace Prediction
         }
         
         bool resimulatedThisTick = false;
-        private float lastResimDuration = 0;
+        private double lastResimDuration = 0;
         private uint lastResimmedTicks = 0;
         
 		long lastTickTimestamp = 0;
@@ -436,7 +460,9 @@ namespace Prediction
             if (!setup) 
                 return;
             
-            _tickTimer.Stat();
+            //Debug.Log($"[PredictionManager][Tick] ${Time.realtimeSinceStartup}");
+            lastInterTickDuration = _interTickTimer.Stop();
+            _tickTimer.Start();
             
             ticksSinceResim++;
             resimulatedThisTick = false;
@@ -472,6 +498,22 @@ namespace Prediction
             tickDuration = System.Diagnostics.Stopwatch.GetTimestamp() - tickDuration;
             
             onPostTick.Dispatch(tickId);
+            _interTickTimer.Start();
+            
+            if (isClient && clientTickRTTBuffer.GetCapacity() > 0)
+            {
+                TickRttRecord tickRttRecord = new TickRttRecord();
+                tickRttRecord.tickId = tickId;
+                tickRttRecord.sentTime = Time.realtimeSinceStartupAsDouble;
+                clientTickRTTBuffer.Add(tickId, tickRttRecord);
+
+                if (TRACK_PACKET_LOSS && missedTicksBuffer.GetFill() > 0)
+                {
+                    onPacketLoss.Dispatch(missedTicksBuffer.GetFill());
+                    //TODO: might be expensive
+                    missedTicksBuffer.Clear();
+                }
+            }
             
             TickStat tickStat = new TickStat();
             tickStat.tickId = tickId;
@@ -479,6 +521,7 @@ namespace Prediction
             tickStat.didResimulate = resimulatedThisTick;
             tickStat.resimDuration = lastResimDuration;
             tickStat.resimTicks = lastResimmedTicks;
+            lastTickDuration = tickStat.duration;
             onTickStat.Dispatch(tickStat);
             
             if (LOG_TIMING || DEBUG) {
@@ -513,6 +556,14 @@ namespace Prediction
             _predictedEntitiesGO.Clear();
             tickResimCounter.Clear();
             PHYSICS_CONTROLLER.Clear();
+
+            lastAckTickId = 0;
+            lastServerRecvIntervalDuration = 0;
+            lastClientTickRTT = 0;
+            lastInterTickDuration = 0;
+            lastTickDuration = 0;
+            clientTickRTTBuffer.Clear();
+            clientLastReceivedTickId = 0;
         }
 
         int PredictionDecisionToInt(PredictionDecision decision)
@@ -701,7 +752,7 @@ namespace Prediction
 
             ticksSinceResim = 0;
             resimulatedThisTick = true;
-            _resimTimer.Stat();
+            _resimTimer.Start();
             lastResimmedTicks = rewind;
             
             //TODO: decide what to do with these hooks...
@@ -984,14 +1035,50 @@ namespace Prediction
             
             if (DEBUG)
                 Debug.Log($"[PredictionManager][OnServerStateReceived] entityId:{entityId} stateRecord:{stateRecord}");
-            
+
             ClientPredictedEntity entity = _clientEntities.GetValueOrDefault(entityId, null);
             if (entity != null && (entityId == localEntityId || (isClient && !isServer)))
             {
                 entity.BufferServerTick(tickId, stateRecord);
+                if (TRACK_PACKET_LOSS)
+                {
+                    if (lastAckTickId < stateRecord.tickId)
+                    {
+                        for (uint i = lastAckTickId + 1; i < stateRecord.tickId; i++)
+                        {
+                            missedTicksBuffer.Add(i, true);       
+                        }
+                        lastAckTickId = stateRecord.tickId;
+                    }
+                    missedTicksBuffer.Remove(stateRecord.tickId);
+                }
+            }
+            
+            if (clientLastReceivedTickId < stateRecord.tickId)
+            {
+                MeasureServerRecvIntervalDuration();
+                clientLastReceivedTickId = stateRecord.tickId;
+                
+                //TODO: measure smallest RTT from batch of client tickIds instead of firing events for every RTT computed
+                if (clientTickRTTBuffer.GetCapacity() > 0)
+                {
+                    TickRttRecord tickRttRecord = clientTickRTTBuffer.Remove(stateRecord.tickId);
+                    TickRttDuration tickRttDuration = new TickRttDuration();
+                    tickRttDuration.tickId = tickRttRecord.tickId;
+                    tickRttDuration.duration = Time.realtimeSinceStartupAsDouble - tickRttRecord.sentTime;
+                    lastClientTickRTT = tickRttDuration.duration;
+                    onTickRttDuration.Dispatch(tickRttDuration);
+                }
             }
         }
 
+        void MeasureServerRecvIntervalDuration()
+        {
+            lastServerRecvIntervalDuration = _serverRecvTimer.Stop();
+            //TODO: this can't work from here sadly - you could receive 2 or more updates at the same time
+            _serverRecvTimer.Start();
+        }
+        
         public void OnEntityOwnershipChanged(uint entityId, bool owned)
         {
             if (!isClient)
@@ -1116,11 +1203,32 @@ namespace Prediction
             return totalResimulationSteps / tickId;
         }
 
+        public struct TickRttRecord
+        {
+            public uint tickId;
+            public double sentTime;
+
+            public override bool Equals(object obj)
+            {
+                if (obj is TickRttRecord rec)
+                {
+                    return tickId == rec.tickId;
+                }
+                return false;
+            }
+        }
+
+        public struct TickRttDuration
+        {
+            public uint tickId;
+            public double duration;
+        }
+        
         public struct TickStat
         {
             public uint tickId;
-            public float duration;
-            public float resimDuration;
+            public double duration;
+            public double resimDuration;
             public bool didResimulate;
             public uint resimTicks;
         }
@@ -1130,6 +1238,8 @@ namespace Prediction
         public SafeEventDispatcher<uint> onPostTick = new();
         public SafeEventDispatcher<uint> onPostResimTick = new();
         public SafeEventDispatcher<TickStat> onTickStat = new();
+        public SafeEventDispatcher<TickRttDuration> onTickRttDuration = new();
+        public SafeEventDispatcher<int> onPacketLoss = new();
             
         public SafeEventDispatcher<ServerUpdateSendError> onServerStateSendError = new();
         public SafeEventDispatcher<EntityProcessingError> onClientStateSendError = new();
