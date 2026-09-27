@@ -46,7 +46,7 @@ namespace Prediction.Tests
             manager.clientHeartbeadSender = (a) => { clientHearatbeatSends++; };
             manager.serverStateSender = (a, b, c) => { serverSends++;  };
             manager.serverWorldStateSender = (a, b) => { serverWorldSends++; };
-            manager.Setup(false, true);
+            manager.Setup(false, true, -1, 0);
 
         }
 

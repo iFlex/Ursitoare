@@ -66,7 +66,7 @@ namespace Prediction.Tests
             {
                 return new int[] { 1, 2, 3 };
             };
-            manager.Setup(true, false);
+            manager.Setup(true, false, -1 , 0);
             manager.AddPredictedEntity(serverEntity1);
             manager.AddPredictedEntity(serverEntity2);
             manager.SetEntityOwner(serverEntity1, 1);

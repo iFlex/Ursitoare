@@ -16,6 +16,8 @@ using UnityEngine;
 
 namespace Prediction
 {
+    //TODO: separate ClientPredictionManager from ServerPredictionManager... the mix is confusing...
+    //TODO: support one connection owning more than one entity - e.g. party games where N players use the same machine; e.g. Rocket League
     //TODO: decouple the implementation from Time.fixedDeltaTime, have it be configurable
     public class PredictionManager
     {
@@ -28,7 +30,6 @@ namespace Prediction
         public static bool IGNORE_CONTROLLABLE_FOLLOWER_DECISIONS = true;
         public static bool LOG_PRE_SIM_STATE = false;
         public static bool PREDICTION_ENABLED = true;
-        public static int INVALID_CONNECTION_ID = -1;
         //FUDO: we might not need the RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD, it gives some good flexibilty for now.
         public static float RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 0;
         public static float RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 0;
@@ -61,9 +62,8 @@ namespace Prediction
         public HashSet<PredictedEntity> _predictedEntities = new HashSet<PredictedEntity>();
         private HashSet<GameObject> _predictedEntitiesGO = new HashSet<GameObject>();
 
-        [SerializeField] private GameObject localGO;
-        private ClientPredictedEntity localEntity;
-        private uint localEntityId;
+        private HashSet<ClientPredictedEntity> localEntity = new HashSet<ClientPredictedEntity>();
+        private HashSet<uint> localEntityId = new();
 
         public bool isClient;
         public bool isServer;
@@ -74,6 +74,7 @@ namespace Prediction
         public bool autoTrackRigidbodies = true;
         public bool useServerWorldStateMessage = false;
         
+        //TODO: add these in the constructor or setup call - don't leave them hanging like this...
         //NOTE: heartbeats are only sent when no predicted entity is controlled locally
         //         tickId
         public Action<uint>                       clientHeartbeadSender;
@@ -88,6 +89,9 @@ namespace Prediction
         
         public Func<IEnumerable<int>> connectionsIterator;
         private WorldStateRecord _worldStateRecord = new WorldStateRecord();
+
+        protected int invalidConnectionId;
+        protected int serverConnectionId;
         
         protected uint lastAckTickId = 0;
         private TickIndexedBuffer<bool> missedTicksBuffer = new TickIndexedBuffer<bool>(MISSING_PACKETS_BUFFER_SIZE);
@@ -138,11 +142,14 @@ namespace Prediction
             clientTickRTTBuffer.emptyValue = new TickRttRecord();
         }
 
-        public void Setup(bool isServer, bool isClient)
+        public void Setup(bool isServer, bool isClient, int invalidConnectionId, int serverConnectionId)
         {
             setup = true;
             this.isServer = isServer;
             this.isClient = isClient;
+            this.invalidConnectionId = invalidConnectionId;
+            this.serverConnectionId = serverConnectionId;
+            
             Validate();
             PHYSICS_CONTROLLER.Setup(isServer);
             Debug.Log($"[PredictionManager] isServer:{isServer} isClient:{isClient}");
@@ -211,7 +218,7 @@ namespace Prediction
 
         public int GetOwner(ServerPredictedEntity entity)
         {
-            return _entityToOwnerConnId.GetValueOrDefault(entity, INVALID_CONNECTION_ID);
+            return _entityToOwnerConnId.GetValueOrDefault(entity, invalidConnectionId);
         }
 
         public ServerPredictedEntity GetEntity(int ownerId)
@@ -283,12 +290,14 @@ namespace Prediction
         //TODO: unit test
         void SetOwnership(ServerPredictedEntity entity, int ownerId)
         {
-            if (entity == null || ownerId == INVALID_CONNECTION_ID)
+            if (entity == null || ownerId == invalidConnectionId)
                 return;
             
             _entityToOwnerConnId[entity] = ownerId;
             _connIdToEntity[ownerId] = entity;
-            entity.Reset(); //Prepare for new stream of tickIds
+            
+            //Prepare for new stream of tickIds
+            entity.Reset();
             serverSetControlledLocally.Invoke(ownerId, entity.id, true);
         }
         
@@ -336,7 +345,7 @@ namespace Prediction
             if (entity == null)
                 return;
             
-            SetEntityOwner(entity, INVALID_CONNECTION_ID);
+            SetEntityOwner(entity, invalidConnectionId);
             if (_serverEntityToId.ContainsKey(entity))
             {
                 uint id = _serverEntityToId[entity];
@@ -371,8 +380,10 @@ namespace Prediction
                 _predictedEntitiesGO.Remove(ent.gameObject);
                 _predictedEntities.Remove(ent.gameObject.GetComponent<PredictedEntity>());
             }
-            if (id == localEntityId && isClient)
+            
+            if (IsControlledLocally(id) && isClient)
             {
+                //TODO: why not run this on the server too?
                 UnsetLocalEntity(id);
             }
             RemovePredictedEntity(_idToServerEntity.GetValueOrDefault(id));
@@ -399,17 +410,16 @@ namespace Prediction
             if (DEBUG)
                 Debug.Log($"[PredictionManager][SetLocalEntity]({id})");
 
-            if (localEntityId == id)
+            if (IsControlledLocally(id))
                 return;
             
-            UnsetLocalEntity();
-            localEntity = _clientEntities.GetValueOrDefault(id, null);
-            if (localEntity != null)
+            var newLocalEntity = _clientEntities.GetValueOrDefault(id, null);
+            if (newLocalEntity != null)
             {
                 //FUDO: consider moving the id fetching mechanic inside entity
-                localEntityId = id;
-                localGO = localEntity.gameObject;
-                localEntity.SetControlledLocally(true);
+                localEntityId.Add(id);
+                localEntity.Add(newLocalEntity);
+                newLocalEntity.SetControlledLocally(true);
             }
         }
         
@@ -418,30 +428,54 @@ namespace Prediction
         {
             if (!isClient)
                 throw new Exception($"INVALID_USAGE: called UnsetLocalEntity on non client instance!");
-            
-            if (localEntityId == id)
+
+            if (IsControlledLocally(id))
             {
-                UnsetLocalEntity();
+                var remEnt = _clientEntities.GetValueOrDefault(id, null);
+                localEntityId.Remove(id);
+                
+                if (remEnt != null)
+                {
+                    localEntity.Remove(remEnt);
+                    remEnt.SetControlledLocally(false);
+                }
             }
         }
 
-        void UnsetLocalEntity()
+        void ClearAllLocalEntities()
         {
-            if (!isClient)
-                throw new Exception($"INVALID_USAGE: called UnsetLocalEntity on non client instance!");
-            
-            if (localEntity != null)
-            {
-                localEntity.SetControlledLocally(false);
-            }
-            localEntityId = 0;
-            localEntity = null;
-            localGO = null;
+            localEntityId.Clear();
+            localEntity.Clear();
         }
 
-        public ClientPredictedEntity GetLocalEntity()
+        public HashSet<ClientPredictedEntity> GetLocalEntities()
         {
             return localEntity;
+        }
+
+        public bool IsServerOwned(ServerPredictedEntity svEnt)
+        {
+            //NOTE: can't simplify with
+            if (_entityToOwnerConnId.TryGetValue(svEnt, out int id))
+            {
+                return id == serverConnectionId;
+            }
+            return false;
+        }
+        
+        public bool IsControlledLocally(ClientPredictedEntity entity)
+        {
+            return localEntity.Contains(entity);
+        }
+        
+        public bool IsControlledLocally(uint id)
+        {
+            return localEntityId.Contains(id);
+        }
+
+        public bool HasLocallyControlledEntities()
+        {
+            return localEntityId.Count > 0;
         }
         
         bool resimulatedThisTick = false;
@@ -544,7 +578,7 @@ namespace Prediction
         {
             //TODO: unit test
             tickId = 1;
-            UnsetLocalEntity();
+            ClearAllLocalEntities();
             // CLEAR ALL TRACKING
             _serverEntityToId.Clear();
             _idToServerEntity.Clear();
@@ -592,7 +626,7 @@ namespace Prediction
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         bool IsFollower(ClientPredictedEntity entity)
         {
-            return entity.id != localEntityId;
+            return !IsControlledLocally(entity);
         }
 
         bool ShouldIgnoreResimulationDecision(ClientPredictedEntity entity)
@@ -602,18 +636,32 @@ namespace Prediction
                    (IGNORE_CONTROLLABLE_FOLLOWER_DECISIONS && entity.IsControllable() && IsFollower(entity)) ||
                    (IsFollower(entity) && !entity.predictAsFollower);
         }
+
+        float GetMinSqrDistToAllLocalEnts()
+        {
+            float result = float.MaxValue;
+            foreach (var ent in localEntity)
+            {
+                float intermediary = (ent.gameObject.transform.position - ent.gameObject.transform.position).sqrMagnitude;
+                if (intermediary < result)
+                {
+                    result = intermediary;
+                }
+            }
+            return result;
+        }
         
 		void ConfigureFollowerResimulation(ClientPredictedEntity ent)
         {
-            if (localEntity == null)
+            if (!HasLocallyControlledEntities())
             {
                 //No local entity - means we can just have everyone follow the server.
                 ent.predictAsFollower = false;
                 ent.usePreciseResimChecker = false;
                 return;
             }
-            
-            float sqrDistance = (localEntity.gameObject.transform.position - ent.gameObject.transform.position).sqrMagnitude;
+
+            float sqrDistance = GetMinSqrDistToAllLocalEnts();
             if (RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD > 0)
             {
                 ent.usePreciseResimChecker = sqrDistance < RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD;
@@ -654,8 +702,7 @@ namespace Prediction
                 }
                 if (decision == PredictionDecision.RESIMULATE)
                 {
-                    //TODO: use IsFollower check
-                    if (pair.Value == localEntity)
+                    if (IsControlledLocally(pair.Value))
                     {
                         localAsksResimulation = true;
                     } 
@@ -855,7 +902,7 @@ namespace Prediction
                 //Uses latest update for each follower
                 foreach (KeyValuePair<uint, ClientPredictedEntity> pair in _clientEntities)
                 {
-                    if (pair.Key == localEntityId)
+                    if (IsControlledLocally(pair.Key))
                     {
                         if (DEBUG)
                             Debug.Log($"[PredictionManager][ClientPreSimTick] Client:{pair.Value} tick:{tickId}");
@@ -900,7 +947,7 @@ namespace Prediction
                     }
                 }
 
-                if (localEntity == null)
+                if (!HasLocallyControlledEntities())
                 {
                     SendSpectatorHeartbeat(tickId);
                 }
@@ -939,7 +986,7 @@ namespace Prediction
                 {
                     ServerPredictedEntity entity = pair.Key;
                     uint id = pair.Value;
-                    if (id != localEntityId)
+                    if (!IsControlledLocally(id))
                     {
                         MarkLatestAppliedTickId(entity.ServerSimulationTick(), entity);
                     }
@@ -962,12 +1009,8 @@ namespace Prediction
                 ServerPredictedEntity entity = pair.Key;
                 uint id = pair.Value;
                 PhysicsStateRecord state = entity.SamplePhysicsState(tickId);
-                //NOTE: the host's own entity is simulated by the client half, so its input never reaches the
-                //server entity's queue. Every other entity carries the input the server applied for this tick.
-                if (id == localEntityId && localEntity != null)
-                {
-                    state.input = localEntity.GetLastInput();
-                }
+                state.input = entity.GetLastInput();
+                
                 if (DEBUG)
                     Debug.Log($"[PredictionManager][ServerPostSimTick] id:{id} update:{state}");
                 
@@ -1037,7 +1080,7 @@ namespace Prediction
                 Debug.Log($"[PredictionManager][OnServerStateReceived] entityId:{entityId} stateRecord:{stateRecord}");
 
             ClientPredictedEntity entity = _clientEntities.GetValueOrDefault(entityId, null);
-            if (entity != null && (entityId == localEntityId || (isClient && !isServer)))
+            if (entity != null && (IsControlledLocally(entityId) || (isClient && !isServer)))
             {
                 entity.BufferServerTick(tickId, stateRecord);
                 if (TRACK_PACKET_LOSS)

@@ -36,6 +36,7 @@ namespace Prediction.Components.Controllers
         //TODO: package private
         //NOTE: uses client tick ids
         public TickIndexedBuffer<PredictionInputRecord> inputQueue;
+        private PredictionInputRecord lastAppliedInput;
         
         //NOTE: Possible to buffer user inputs if needed to try and ensure a closer to client simulation on the server at the
         //cost of delaying the server behind the client by a small margin. The more you buffer, the more the server is delayed, the less reliable is the client image.
@@ -177,6 +178,7 @@ namespace Prediction.Components.Controllers
             {
                 lastInputLoadedTick = qTickId;
                 LoadInput(nextInput);
+                lastAppliedInput = nextInput;
             }
             else
             {
@@ -371,6 +373,11 @@ namespace Prediction.Components.Controllers
         public uint BufferSize()
         {
             return inputQueue.GetRange();
+        }
+
+        public PredictionInputRecord GetLastInput()
+        {
+            return lastAppliedInput;
         }
         
         //NOTE: call this when you change the owner of the object
