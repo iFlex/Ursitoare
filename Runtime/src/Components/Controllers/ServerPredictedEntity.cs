@@ -80,6 +80,7 @@ namespace Prediction.Components.Controllers
                     serverStateHistory.Add(new PhysicsStateRecord());
                 }
             }
+            serverAppliedInput = new PredictionInputRecord(GetFloatInputCount(), GetBinaryInputCount());
         }
 
         DesyncEvent devt = new DesyncEvent();
