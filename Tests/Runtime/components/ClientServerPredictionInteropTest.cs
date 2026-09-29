@@ -10,6 +10,7 @@ using Prediction.Tests.mocks;
 using UnityEngine;
 using Assert = UnityEngine.Assertions.Assert;
 
+//TODO: move these tests to PredictionManagerInteropTest file
 namespace Prediction.Tests
 {
     //TODO: interpo test should be a PredictionManager test.
@@ -25,9 +26,14 @@ namespace Prediction.Tests
         public static MockPredictableControllableComponent serverComponent;
         public static ServerPredictedEntity serverEntity;
         
+        public static GameObject follower;
+        public static Rigidbody followerRigidbody;
+        public static MockPredictableControllableComponent followerComponent;
+        public static ClientPredictedEntity followerEntity;
+
         public static MockPhysicsController physicsController;
         public static SimpleConfigurableResimulationDecider resimDecider = new SimpleConfigurableResimulationDecider();
-        
+
         //TODO: these tests may not be relevant
         [SetUp]
         public void SetUp()
@@ -54,6 +60,34 @@ namespace Prediction.Tests
             
             serverEntity = new ServerPredictedEntity(0 ,20, serverRigidbody, server, new []{serverComponent}, new[]{serverComponent});
             ServerPredictedEntity.USE_BUFFERING = false;
+
+            //A second client's mirror of the same entity. It follows, it does not control.
+            follower = new GameObject("follower");
+            follower.transform.position = Vector3.zero;
+            followerRigidbody = follower.AddComponent<Rigidbody>();
+
+            followerComponent = new MockPredictableControllableComponent();
+            followerComponent.rigidbody = followerRigidbody;
+
+            followerEntity = new ClientPredictedEntity(0, false, 20, followerRigidbody, follower, new []{followerComponent}, new[]{followerComponent});
+            followerEntity.SetSingleStateEligibilityCheckHandler(resimDecider.Check);
+        }
+
+        //NOTE: mimics an integration serialising a state message and rebuilding it on the receiving client.
+        static PhysicsStateRecord WireCopy(PhysicsStateRecord state)
+        {
+            PhysicsStateRecord copy = PhysicsStateRecord.Alloc();
+            copy.tickId = state.tickId;
+            copy.position = state.position;
+            copy.rotation = state.rotation;
+            copy.velocity = state.velocity;
+            copy.angularVelocity = state.angularVelocity;
+            if (state.input != null)
+            {
+                copy.input = new PredictionInputRecord(state.input.scalarInput.Length, state.input.binaryInput.Length);
+                copy.input.From(state.input);
+            }
+            return copy;
         }
         
         [Test]
@@ -75,6 +109,33 @@ namespace Prediction.Tests
             }
         }
         
+        [Test]
+        public void TestFollowerOnAnotherClientReceivesAndPredictsWithTheOwnersInput()
+        {
+            var inputs = new [] { Vector3.zero, Vector3.right * 5, Vector3.up * 5, Vector3.right * 5, Vector3.up * 5, Vector3.right * 5, Vector3.up * 5, Vector3.right * 5, Vector3.up * 5 };
+            for (uint tickId = 1; tickId < inputs.Length; ++tickId)
+            {
+                clientComponent.inputVector = inputs[tickId];
+                PredictionInputRecord record = clientEntity.ClientSimulationTick(tickId);
+                clientEntity.SamplePhysicsState(tickId);
+
+                serverEntity.BufferClientTick(tickId, record);
+                serverEntity.ServerSimulationTick();
+                PhysicsStateRecord serverRecord = serverEntity.SamplePhysicsState(tickId);
+
+                //The owner's input travelled to the server and back out to the other client.
+                Assert.IsNotNull(serverRecord.input);
+
+                followerEntity.BufferServerTick(tickId, WireCopy(serverRecord));
+                followerEntity.ClientFollowerSimulationTick(tickId);
+                followerEntity.SamplePhysicsState(tickId);
+
+                //The follower loaded that input and simulated one tick past the state it was given.
+                Assert.AreEqual(inputs[tickId], followerComponent.stateVector);
+                Assert.AreEqual(serverRigidbody.position + inputs[tickId], followerRigidbody.position);
+            }
+        }
+
         [Test]
         public void TestHappyPathWithDelay()
         {

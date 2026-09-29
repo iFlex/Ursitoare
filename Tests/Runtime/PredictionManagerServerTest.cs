@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
 #if (UNITY_EDITOR)
+using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 using Prediction.Components.Controllers;
@@ -26,7 +27,7 @@ namespace Prediction.Tests
         
         MockPhysicsController physicsController;
         SimpleConfigurableResimulationDecider resimDecider = new SimpleConfigurableResimulationDecider();
-        PredictionManager manager;
+        ServerPredictionManager manager;
 
         int clientSends = 0;
         int clientHearatbeatSends = 0;
@@ -54,23 +55,22 @@ namespace Prediction.Tests
             serverEntity2 = new ServerPredictedEntity(2, 20, serverRigidbody2, server2, new []{serverComponent2}, new[]{serverComponent2});
 
             clientSends = clientHearatbeatSends = serverWorldSends = serverSends = 0;
-            PredictionManager.PHYSICS_CONTROLLER = physicsController;
-            manager = new PredictionManager();
-            PredictionManager.PHYSICS_CONTROLLER = physicsController;
-            manager.clientStateSender = (a, b) => { clientSends++; };
-            manager.clientHeartbeadSender = (a) => { clientHearatbeatSends++; };
-            manager.serverStateSender = (a, b, c) => { serverSends++; };
-            manager.serverWorldStateSender = (a, b) => { serverWorldSends++; };
-            manager.serverSetControlledLocally = (a, b, c) => { };
-            manager.connectionsIterator = () =>
-            {
-                return new int[] { 1, 2, 3 };
-            };
-            manager.Setup(true, false, -1 , 0);
-            manager.AddPredictedEntity(serverEntity1);
-            manager.AddPredictedEntity(serverEntity2);
-            manager.SetEntityOwner(serverEntity1, 1);
-            manager.SetEntityOwner(serverEntity2, 2);
+            manager = MakeMgr(null, null);
+        }
+
+        ServerPredictionManager MakeMgr(Action<int, uint, PhysicsStateRecord> serverStateSenderOverride, Action<int, WorldStateRecord> serverWorldStateSenderOverride)
+        {
+            var mgr = new ServerPredictionManager(-1, 0, 
+                (serverStateSenderOverride == null) ? (a, b, c) => { serverSends++; } : serverStateSenderOverride, 
+                (serverWorldStateSenderOverride == null) ? (a, b) => { serverWorldSends++; } : serverWorldStateSenderOverride, 
+                (a, b, c) => { }, 
+                () => { return new int[] { 1, 2, 3 }; });
+            mgr.SetPhysicsController(physicsController);
+            mgr.AddPredictedEntity(serverEntity1);
+            mgr.AddPredictedEntity(serverEntity2);
+            mgr.SetEntityOwner(serverEntity1, 1);
+            mgr.SetEntityOwner(serverEntity2, 2);
+            return mgr;
         }
 
         public class StateUpdate
@@ -97,7 +97,7 @@ namespace Prediction.Tests
         {
             manager.useServerWorldStateMessage = false;
             List<StateUpdate> sentStates = new List<StateUpdate>();
-            manager.serverStateSender = (connId, entityId, state) =>
+            manager = MakeMgr((connId, entityId, state) =>
             {
                 StateUpdate su = new StateUpdate();
                 su.connId = connId;
@@ -105,7 +105,7 @@ namespace Prediction.Tests
                 su.state = PhysicsStateRecord.Alloc();
                 su.state.From(state);
                 sentStates.Add(su);
-            };
+            }, null);
             
             manager.Tick();
             //No input = no movement
@@ -141,8 +141,8 @@ namespace Prediction.Tests
             pir2.WriteNextScalar(0);
             pir2.WriteNextScalar(0);
             
-            manager.OnClientStateReceived(1, 10, pir1);
-            manager.OnClientStateReceived(2, 15, pir2);
+            manager.OnClientStateReceived(1, 10, 1, pir1);
+            manager.OnClientStateReceived(2, 15, 2, pir2);
             manager.Tick();
             
             //No input = no movement
@@ -181,8 +181,8 @@ namespace Prediction.Tests
             Assert.AreEqual(3, su32.state.tickId);
             sentStates.Clear();
             
-            manager.OnClientStateReceived(1, 12, pir1);
-            manager.OnClientStateReceived(2, 16, pir2);
+            manager.OnClientStateReceived(1, 12, 1, pir1);
+            manager.OnClientStateReceived(2, 16, 2, pir2);
             manager.Tick();
             
             su11 = StateUpdate.FindBy(1, 1, sentStates);
@@ -205,15 +205,14 @@ namespace Prediction.Tests
         {
             manager.useServerWorldStateMessage = false;
             List<StateUpdate> sentStates = new List<StateUpdate>();
-            manager.serverStateSender = (connId, entityId, state) =>
+            manager = MakeMgr((connId, entityId, state) =>
             {
                 StateUpdate su = new StateUpdate();
                 su.connId = connId;
-                su.entityId = entityId;
                 //NOTE: keeping the record itself, the way an integration serialises it on the spot.
                 su.state = state;
                 sentStates.Add(su);
-            };
+            }, null);
 
             PredictionInputRecord pir1 = new PredictionInputRecord(3, 0);
             pir1.WriteReset();
@@ -228,8 +227,8 @@ namespace Prediction.Tests
             pir2.WriteNextScalar(0);
 
             //Connection 1 drives entity 1, connection 2 drives entity 2, connection 3 drives nothing.
-            manager.OnClientStateReceived(1, 10, pir1);
-            manager.OnClientStateReceived(2, 15, pir2);
+            manager.OnClientStateReceived(1, 10, 1, pir1);
+            manager.OnClientStateReceived(2, 15, 2, pir2);
             manager.Tick();
 
             Assert.AreEqual(6, sentStates.Count);
@@ -250,15 +249,15 @@ namespace Prediction.Tests
             manager.AddPredictedEntity(serverEntity2);
 
             List<WorldStateRecord> sentWorldStates = new List<WorldStateRecord>();
-            manager.serverWorldStateSender = (connId, worldState) => { sentWorldStates.Add(worldState); };
-
+            manager = MakeMgr(null, (connId, worldState) => { sentWorldStates.Add(worldState);});
+            
             PredictionInputRecord pir1 = new PredictionInputRecord(3, 0);
             pir1.WriteReset();
             pir1.WriteNextScalar(1);
             pir1.WriteNextScalar(0);
             pir1.WriteNextScalar(0);
 
-            manager.OnClientStateReceived(1, 10, pir1);
+            manager.OnClientStateReceived(1, 10, 1, pir1);
             manager.Tick();
 
             //One batch per connection, each holding a state per entity.
@@ -297,7 +296,7 @@ namespace Prediction.Tests
             Assert.AreEqual(serverEntity1, manager.GetEntity(1));
             Assert.AreEqual(null, manager.GetEntity(3));
             
-            manager.UnsetOwnership(1);
+            manager.UnsetOwnership(serverEntity1);
             Assert.AreEqual(-1, manager.GetOwner(serverEntity1));
             Assert.AreEqual(2, manager.GetOwner(serverEntity2));
             Assert.AreEqual(null, manager.GetEntity(3));

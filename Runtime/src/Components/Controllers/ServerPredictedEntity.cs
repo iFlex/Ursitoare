@@ -36,6 +36,7 @@ namespace Prediction.Components.Controllers
         //TODO: package private
         //NOTE: uses client tick ids
         public TickIndexedBuffer<PredictionInputRecord> inputQueue;
+        private PredictionInputRecord serverAppliedInput;
         private PredictionInputRecord lastAppliedInput;
         
         //NOTE: Possible to buffer user inputs if needed to try and ensure a closer to client simulation on the server at the
@@ -189,7 +190,17 @@ namespace Prediction.Components.Controllers
                 potentialDesync.Dispatch(devt);
             }
 		}
-		
+
+        //TODO: unit test
+        public void ServerOwnedSimulationTick()
+        {
+            //TODO: can we make this more efficient instead of going through serialize / deserialize for no reason?
+            SampleInput(serverAppliedInput);
+            LoadInput(serverAppliedInput);
+            ApplyForces();
+            lastAppliedInput = serverAppliedInput;
+        }
+        
 		public static bool LOG_INPUT_QUEUE_SIZE = false;
         public uint ServerSimulationTick()
         {
@@ -263,7 +274,7 @@ namespace Prediction.Components.Controllers
                 if (serverStateRecord.input == null)
                 {
                     //LAZY ALLOC
-                    serverStateRecord.input = new PredictionInputRecord(totalFloatInputs, totalBinaryInputs);
+                    serverStateRecord.input = new PredictionInputRecord(GetFloatInputCount(), GetBinaryInputCount());
                 }
                 SampleInput(serverStateRecord.input);
             }

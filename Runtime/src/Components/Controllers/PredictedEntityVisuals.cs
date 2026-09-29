@@ -128,7 +128,7 @@ namespace Prediction.Components.Controllers
                     Vector3 beforePos = visualsEntity.transform.position;
                     Quaternion rotBefore = visualsEntity.transform.rotation;
                     
-                    interpolationProvider.Update(Time.deltaTime, PredictionManager.Instance.tickId);
+                    interpolationProvider.Update(Time.deltaTime, PredictionManager.Instance.GetTickId());
                     interpolationDistance = (visualsEntity.transform.position - logicalEntityTransform.position).magnitude;
 
                     Vector3 posDiff = visualsEntity.transform.position - beforePos;

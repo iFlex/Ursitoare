@@ -21,7 +21,7 @@ namespace Prediction.Tests
         MockPhysicsController physicsController;
         MockPredictableControllableComponent component;
         SimpleConfigurableResimulationDecider resimDecider = new SimpleConfigurableResimulationDecider();
-        PredictionManager manager;
+        ClientPredictionManager manager;
 
         int clientSends = 0;
         int clientHearatbeatSends = 0;
@@ -40,13 +40,8 @@ namespace Prediction.Tests
             physicsController = new MockPhysicsController();
 
             clientSends = clientHearatbeatSends = serverWorldSends = serverSends = 0;
-            manager = new PredictionManager();
-            PredictionManager.PHYSICS_CONTROLLER = physicsController;
-            manager.clientStateSender = (a, b) => { clientSends++; };
-            manager.clientHeartbeadSender = (a) => { clientHearatbeatSends++; };
-            manager.serverStateSender = (a, b, c) => { serverSends++;  };
-            manager.serverWorldStateSender = (a, b) => { serverWorldSends++; };
-            manager.Setup(false, true, -1, 0);
+            manager = new ClientPredictionManager((a) => { clientHearatbeatSends++; }, (a, e, b) => { clientSends++; });
+            manager.SetPhysicsController(physicsController);
 
         }
 
@@ -167,7 +162,7 @@ namespace Prediction.Tests
                 {
                     manager.OnServerStateReceived(1, serverTicks[tickId - serverDelay]);
                 }
-                Assert.AreEqual(tickId + 1, manager.tickId);
+                Assert.AreEqual(tickId + 1, manager.GetTickId());
             }
             
             Assert.AreEqual(serverTicks[serverTicks.Length - 1].position, rigidbody.position);
@@ -363,17 +358,17 @@ namespace Prediction.Tests
             mock1._fromTick = 5;
             manager.AddPredictedEntity(mock1);
 
-            uint initialTickId = manager.tickId;
+            uint initialTickId = manager.GetTickId();
             manager.Tick();
 
-            Assert.AreEqual(initialTickId, manager.tickId,
+            Assert.AreEqual(initialTickId, manager.GetTickId(),
                 "TickId must not advance while the tick is frozen.");
             Assert.AreEqual(1u, manager.totalTickFreezes);
 
             // Consecutive frozen ticks keep tickId frozen and accumulate the counter.
             manager.Tick();
             manager.Tick();
-            Assert.AreEqual(initialTickId, manager.tickId);
+            Assert.AreEqual(initialTickId, manager.GetTickId());
             Assert.AreEqual(3u, manager.totalTickFreezes);
         }
 
@@ -384,10 +379,10 @@ namespace Prediction.Tests
             mock1._predictionDecision = PredictionDecision.NOOP;
             manager.AddPredictedEntity(mock1);
 
-            uint initialTickId = manager.tickId;
+            uint initialTickId = manager.GetTickId();
             manager.Tick();
 
-            Assert.AreEqual(initialTickId + 1, manager.tickId,
+            Assert.AreEqual(initialTickId + 1, manager.GetTickId(),
                 "TickId must advance on a normal (non-frozen) tick.");
             Assert.AreEqual(0u, manager.totalTickFreezes);
         }
@@ -412,7 +407,7 @@ namespace Prediction.Tests
                 component.inputVector = Vector3.zero;
                 manager.Tick();
             }
-            Assert.AreEqual(26u, manager.tickId);
+            Assert.AreEqual(26u, manager.GetTickId());
 
             // Server reports a state from tick 5 — exactly at the history boundary.
             PhysicsStateRecord oldState = PhysicsStateRecord.Alloc();
@@ -420,17 +415,17 @@ namespace Prediction.Tests
             oldState.tickId = 5;
             manager.OnServerStateReceived(1, oldState);
 
-            uint frozenAt = manager.tickId; // 26
+            uint frozenAt = manager.GetTickId(); // 26
             manager.Tick();
 
-            Assert.AreEqual(frozenAt, manager.tickId,
+            Assert.AreEqual(frozenAt, manager.GetTickId(),
                 "TickId must not advance while tick is frozen.");
             Assert.AreEqual(1u, manager.totalTickFreezes);
 
             // Two more frozen ticks while server state is still outside history.
             manager.Tick();
             manager.Tick();
-            Assert.AreEqual(frozenAt, manager.tickId);
+            Assert.AreEqual(frozenAt, manager.GetTickId());
             Assert.AreEqual(3u, manager.totalTickFreezes);
 
             // Server now reports a state from tick 6 — just inside the history window.
@@ -441,7 +436,7 @@ namespace Prediction.Tests
             manager.OnServerStateReceived(1, newerState);
 
             manager.Tick(); // should thaw and advance normally
-            Assert.AreEqual(frozenAt + 1, manager.tickId,
+            Assert.AreEqual(frozenAt + 1, manager.GetTickId(),
                 "TickId should resume incrementing once the freeze is resolved.");
             Assert.AreEqual(3u, manager.totalTickFreezes,
                 "No new freeze should occur after the freeze resolves.");
