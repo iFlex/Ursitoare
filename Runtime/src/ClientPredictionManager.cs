@@ -121,6 +121,13 @@ namespace Prediction
             entity.SetSingleStateEligibilityCheckHandler(SNAPSHOT_INSTANCE_RESIM_CHECKER.Check);
             entity.SetFollowerSingleStateEligibilityCheckHandler(FOLLOWER_INSTANCE_RESIM_CHECKER.Check);
             
+            bool alreadyLocallyControlled = IsControlledLocally(id);
+            entity.SetControlledLocally(alreadyLocallyControlled);
+            if (alreadyLocallyControlled)
+            {
+                localEntity.Add(entity);
+            }
+            
             if (autoTrackRigidbodies)
             {
                 PhysicsController.Track(entity.rigidbody);
@@ -133,9 +140,10 @@ namespace Prediction
             {
                 if (IsControlledLocally(entity.id))
                 {
-                    //TODO: why not run this on the server too?
-                    UnsetLocalEntity(entity.id);
+                    localEntity.Remove(entity);
+                    entity.SetControlledLocally(false);
                 }
+                
                 _clientEntities.Remove(entity.id);
                 if (autoTrackRigidbodies)
                 {
@@ -154,7 +162,8 @@ namespace Prediction
 
             if (IsControlledLocally(id))
                 return;
-    
+            localEntityId.Add(id);
+            
             var newLocalEntity = _clientEntities.GetValueOrDefault(id, null);
             if (DEBUG || DEBUG_OWNERSHIP)
                 Debug.Log($"[PredictionManager][Ownership][SetLocalEntity] entityId:{id} entityInstance:{newLocalEntity}|");
@@ -162,7 +171,6 @@ namespace Prediction
             if (newLocalEntity != null)
             {
                 //FUDO: consider moving the id fetching mechanic inside entity
-                localEntityId.Add(id);
                 localEntity.Add(newLocalEntity);
                 newLocalEntity.SetControlledLocally(true);
             }
@@ -176,8 +184,9 @@ namespace Prediction
             
             if (IsControlledLocally(id))
             {
-                var remEnt = _clientEntities.GetValueOrDefault(id, null);
                 localEntityId.Remove(id);
+                
+                var remEnt = _clientEntities.GetValueOrDefault(id, null);
                 if (DEBUG || DEBUG_OWNERSHIP)
                     Debug.Log($"[PredictionManager][Ownership][UnsetLocalEntity] entityId:{id} entityInstance:{remEnt}|");
                 
@@ -187,12 +196,6 @@ namespace Prediction
                     remEnt.SetControlledLocally(false);
                 }
             }
-        }
-
-        void ClearAllLocalEntities()
-        {
-            localEntityId.Clear();
-            localEntity.Clear();
         }
 
         public HashSet<ClientPredictedEntity> GetLocalEntities()
@@ -212,7 +215,7 @@ namespace Prediction
 
         public bool HasLocallyControlledEntities()
         {
-            return localEntityId.Count > 0;
+            return localEntity.Count > 0;
         }
 
         public override uint GetServerTickId()
@@ -269,7 +272,7 @@ namespace Prediction
                 }
                 
                 //TODO: review
-                float intermediary = (Camera.main.transform.position - ent.gameObject.transform.position).sqrMagnitude;
+                float intermediary = (ent.gameObject.transform.position - ent.gameObject.transform.position).sqrMagnitude;
                 if (intermediary < result)
                 {
                     result = intermediary;
@@ -719,7 +722,8 @@ namespace Prediction
         public override void Clear()
         {
             base.Clear();
-            ClearAllLocalEntities();
+            localEntityId.Clear();
+            localEntity.Clear();
             _clientEntities.Clear();
             
             clientTickRTTBuffer.Clear();

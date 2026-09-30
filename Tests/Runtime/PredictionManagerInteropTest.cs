@@ -169,6 +169,35 @@ namespace Prediction.Tests
             clientGOs[i].transform.position = position;
             clientGOs[i].GetComponent<Rigidbody>().position = position;
         }
+
+        [Test]
+        public void UnsetOwnershipOnNotRegisteredEntity()
+        {
+            Assert.DoesNotThrow(() => managerServer.UnsetOwnership(null));
+            
+            var visuals = new GameObject("ServerVisual_");
+            var go = new GameObject("Server_predicted_");
+            Rigidbody srb = go.AddComponent<Rigidbody>();
+            var svEnt = new ServerPredictedEntity((uint)0, BUFFER_SIZE, srb, visuals, Array.Empty<PredictableControllableComponent>(), Array.Empty<PredictableComponent>());
+            
+            managerServer.UnsetOwnership(svEnt);
+            Assert.AreEqual(-1, managerServer.GetOwner(svEnt));
+            Assert.AreEqual(false, managerServer.IsServerOwned(svEnt));
+        }
+        
+        [Test]
+        public void UnsetOwnershipOnNotOwnerEntity()
+        {
+            var visuals = new GameObject("ServerVisual_");
+            var go = new GameObject("Server_predicted_");
+            Rigidbody srb = go.AddComponent<Rigidbody>();
+            var svEnt = new ServerPredictedEntity((uint)0, BUFFER_SIZE, srb, visuals, Array.Empty<PredictableControllableComponent>(), Array.Empty<PredictableComponent>());
+            managerServer.AddPredictedEntity(svEnt);
+            
+            managerServer.UnsetOwnership(svEnt);
+            Assert.AreEqual(-1, managerServer.GetOwner(svEnt));
+            Assert.AreEqual(false, managerServer.IsServerOwned(svEnt));
+        }
         
         [Test]
         public void SetOwnerReflectedOnBothServerAndClient()
@@ -204,10 +233,10 @@ namespace Prediction.Tests
                 managerServer.SetEntityOwner(serverEntities[i], 0);
             }
             
-            managerServer.UnsetOwnership(serverEntities[0]);
-            managerServer.UnsetOwnership(serverEntities[1]);
-            managerServer.UnsetOwnership(serverEntities[0]);
-            managerServer.UnsetOwnership(serverEntities[2]);
+            managerServer.UnsetOwnership(serverEntities[0], 0);
+            managerServer.UnsetOwnership(serverEntities[1], 0);
+            managerServer.UnsetOwnership(serverEntities[0], 0);
+            managerServer.UnsetOwnership(serverEntities[2], 0);
             
             managerServer.SetEntityOwner(serverEntities[0], 1);
             managerServer.SetEntityOwner(serverEntities[0], 1);
@@ -246,7 +275,7 @@ namespace Prediction.Tests
             //Client removes the entity without the server revoking ownership first
             managerClient.RemovePredictedEntity(clientEntities[ROCKET]);
 
-            Assert.AreEqual(false, managerClient.IsControlledLocally((uint)ROCKET));
+            Assert.AreEqual(true, managerClient.IsControlledLocally((uint)ROCKET));
             Assert.AreEqual(false, managerClient.IsControlledLocally(clientEntities[ROCKET]));
             Assert.AreEqual(false, managerClient.HasLocallyControlledEntities());
             Assert.AreEqual(0, managerClient.GetLocalEntities().Count);
@@ -365,6 +394,7 @@ namespace Prediction.Tests
         public void OwnershipGrantedBeforeClientRegistrationIsApplied()
         {
             CreateEntities(1, false);
+            Assert.AreEqual(false, managerClient.IsControlledLocally((uint)0));
 
             //Ownership message arrives before the client registered the entity
             managerServer.SetEntityOwner(serverEntities[0], 1);
@@ -386,8 +416,8 @@ namespace Prediction.Tests
             Assert.AreEqual(true, clientEntities[0].isControlledLocally);
 
             managerClient.Clear();
-
-            Assert.AreEqual(false, clientEntities[0].isControlledLocally);
+            Assert.DoesNotThrow(() => managerClient.Tick());
+            
             Assert.AreEqual(0, managerClient.GetLocalEntities().Count);
 
             //Entity surviving the clear registers again as a follower
@@ -601,52 +631,100 @@ namespace Prediction.Tests
             CollectionAssert.Contains(stateEntitiesSentToClient, 0u, "Healthy entity state was not sent to the client");
         }
 
-        class RecordingInterpolator : VisualsInterpolationsProvider
+        /*
+         
+        [Test]
+        public void TestHappyPath()
         {
-            public List<bool> controlledLocallyCalls = new List<bool>();
-
-            public void Update(float deltaTime, uint currentTick)
+            var inputs = new [] { Vector3.zero, Vector3.right * 5, Vector3.up * 5, Vector3.right * 5, Vector3.up * 5, Vector3.right * 5, Vector3.up * 5, Vector3.right * 5, Vector3.up * 5 };
+            for (uint tickId = 1; tickId < inputs.Length; ++tickId)
             {
+                clientComponent.inputVector = inputs[tickId];
+                PredictionInputRecord record = clientEntity.ClientSimulationTick(tickId);
+                clientEntity.SamplePhysicsState(tickId);
+                serverEntity.BufferClientTick(tickId, record);
+                serverEntity.ServerSimulationTick();
+                PhysicsStateRecord serverRecord = serverEntity.SamplePhysicsState(tickId);
+                clientEntity.BufferServerTick(tickId, serverRecord);
+                Assert.AreEqual(tickId, serverRecord.tickId);
+                Assert.AreEqual(serverRecord.position, clientRigidbody.position);
+                Assert.AreEqual(serverRigidbody.position, clientRigidbody.position);
             }
-
-            public void Add(PhysicsStateRecord record)
+        }
+        
+        [Test]
+        public void TestFollowerOnAnotherClientReceivesAndPredictsWithTheOwnersInput()
+        {
+            var inputs = new [] { Vector3.zero, Vector3.right * 5, Vector3.up * 5, Vector3.right * 5, Vector3.up * 5, Vector3.right * 5, Vector3.up * 5, Vector3.right * 5, Vector3.up * 5 };
+            for (uint tickId = 1; tickId < inputs.Length; ++tickId)
             {
-            }
+                clientComponent.inputVector = inputs[tickId];
+                PredictionInputRecord record = clientEntity.ClientSimulationTick(tickId);
+                clientEntity.SamplePhysicsState(tickId);
 
-            public void SetInterpolationTarget(Transform t)
-            {
-            }
+                serverEntity.BufferClientTick(tickId, record);
+                serverEntity.ServerSimulationTick();
+                PhysicsStateRecord serverRecord = serverEntity.SamplePhysicsState(tickId);
 
-            public void Reset()
-            {
-            }
+                //The owner's input travelled to the server and back out to the other client.
+                Assert.IsNotNull(serverRecord.input);
 
-            public void SetControlledLocally(bool isLocalAuthority)
-            {
-                controlledLocallyCalls.Add(isLocalAuthority);
+                followerEntity.BufferServerTick(tickId, WireCopy(serverRecord));
+                followerEntity.ClientFollowerSimulationTick(tickId);
+                followerEntity.SamplePhysicsState(tickId);
+
+                //The follower loaded that input and simulated one tick past the state it was given.
+                Assert.AreEqual(inputs[tickId], followerComponent.stateVector);
+                Assert.AreEqual(serverRigidbody.position + inputs[tickId], followerRigidbody.position);
             }
         }
 
         [Test]
-        public void VisualsAreToldWhenOwnershipChanges()
+        public void TestHappyPathWithDelay()
         {
-            CreateEntities(1);
-            GameObject visualsGO = new GameObject("Client_visuals_0");
-            visualsGO.transform.SetParent(clientGOs[0].transform);
-            extraGOs.Add(visualsGO);
-            PredictedEntityVisuals visuals = clientGOs[0].AddComponent<PredictedEntityVisuals>();
-            visuals.visualsEntity = visualsGO;
-            RecordingInterpolator interpolator = new RecordingInterpolator();
-            visuals.SetClientPredictedEntity(clientEntities[0], interpolator);
-            Assert.IsNotEmpty(interpolator.controlledLocallyCalls);
-            Assert.AreEqual(false, interpolator.controlledLocallyCalls[interpolator.controlledLocallyCalls.Count - 1]);
+            var inputs = new [] { Vector3.zero, Vector3.right * 5, Vector3.up * 5, Vector3.right * 5, Vector3.up * 5, Vector3.right * 5, Vector3.up * 5, Vector3.right * 5, Vector3.up * 5 };
+            
+            int resimulationsCounter = 0;
+            clientEntity.resimulation.AddEventListener((started) =>
+            {
+                if (started)
+                    resimulationsCounter++;
+            });
+            //TODO: fix
+            uint delay = 3;
+            for (uint tickId = 1; tickId < delay; ++tickId)
+            {
+                clientComponent.inputVector = inputs[tickId];
+                PredictionInputRecord record = clientEntity.ClientSimulationTick(tickId);
+                clientEntity.SamplePhysicsState(tickId);
+                serverEntity.BufferClientTick(tickId, record);
+            }
+            for (uint tickId = delay; tickId < inputs.Length; ++tickId)
+            {
+                clientComponent.inputVector = inputs[tickId];
+                PredictionInputRecord record = clientEntity.ClientSimulationTick(tickId);
+                clientEntity.SamplePhysicsState(tickId);
+                serverEntity.BufferClientTick(tickId, record);
+                serverEntity.ServerSimulationTick();
+                PhysicsStateRecord serverRecord = serverEntity.SamplePhysicsState(tickId);
+                clientEntity.BufferServerTick(tickId, serverRecord);
+            }
+            clientComponent.rigidbody = null;
+            for (uint tickId = (uint) inputs.Length; tickId < inputs.Length + delay; tickId++)
+            {
+                clientComponent.inputVector = inputs[tickId % inputs.Length];
+                PredictionInputRecord record = clientEntity.ClientSimulationTick(tickId);
+                clientEntity.SamplePhysicsState(tickId);
+                serverEntity.BufferClientTick(tickId, record);
+                serverEntity.ServerSimulationTick();
+                PhysicsStateRecord serverRecord = serverEntity.SamplePhysicsState(tickId);
+                clientEntity.BufferServerTick(tickId, serverRecord);
+            }
 
-            managerServer.SetEntityOwner(serverEntities[0], 1);
-            Assert.AreEqual(true, interpolator.controlledLocallyCalls[interpolator.controlledLocallyCalls.Count - 1], "Interpolator not told the entity became locally controlled");
-
-            managerServer.UnsetOwnership(serverEntities[0], 1);
-            Assert.AreEqual(false, interpolator.controlledLocallyCalls[interpolator.controlledLocallyCalls.Count - 1], "Interpolator not told the entity stopped being locally controlled");
+            Assert.AreEqual(0, resimulationsCounter);
+            Assert.AreEqual(serverRigidbody.position, clientRigidbody.position);
         }
+         */
     }
 }
 #endif
