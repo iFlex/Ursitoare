@@ -26,7 +26,11 @@ namespace Prediction
         
         private TickIndexedBuffer<bool> missedTicksBuffer = new TickIndexedBuffer<bool>(MISSING_PACKETS_BUFFER_SIZE);
         protected TickIndexedBuffer<TickRttRecord> clientTickRTTBuffer;
-        private Dictionary<uint, uint> tickResimCounter = new Dictionary<uint, uint>();
+        //TODO: is this overkill? should we drop it?
+        private TickIndexedBuffer<uint> tickResimCounter = new TickIndexedBuffer<uint>(RESIM_TICK_COUNT_BUFFER_SIZE);
+        
+        //TODO read only
+        public bool resimulating = false;
         
         public ClientPredictionManager(Action<uint> unreliableClientHeartbeadSender, Action<uint, uint, PredictionInputRecord> unreliableClientStateSender)
         {
@@ -39,6 +43,7 @@ namespace Prediction
             
             clientTickRTTBuffer = new TickIndexedBuffer<TickRttRecord>(CLIENT_RTT_MEASUREMENTS_BUFFER_SIZE);
             clientTickRTTBuffer.emptyValue = new TickRttRecord();
+            tickResimCounter.emptyValue = 0;
         }
         
         protected override void Validate()
@@ -508,7 +513,7 @@ namespace Prediction
         {
             if (protectFromOversimulation)
             {
-                tickResimCounter[tid] = tickResimCounter.GetValueOrDefault(tid, 0u) + 1;
+                tickResimCounter.Add(tid, tickResimCounter.Get(tid) + 1);
             }
         }
         
@@ -554,7 +559,7 @@ namespace Prediction
         {
             return !protectFromOversimulation || (
                 ( oversimProtectWithTickInterval && ticksSinceResim >= minTicksBetweenResims) || 
-                (!oversimProtectWithTickInterval && tickResimCounter.GetValueOrDefault(tid, 0u) < maxTickResimulationCount));
+                (!oversimProtectWithTickInterval && tickResimCounter.Get(tid) < maxTickResimulationCount));
         }
         
         void ClientPreSimTick()

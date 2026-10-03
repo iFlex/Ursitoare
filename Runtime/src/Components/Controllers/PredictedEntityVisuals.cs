@@ -151,9 +151,8 @@ namespace Prediction.Components.Controllers
                 }
                 else if (serverEntityTransform)
                 {
-                    //TODO: use transform or visualsEntity.transform? wat?
-                    transform.position = serverEntityTransform.position;
-                    transform.rotation = serverEntityTransform.rotation;
+                    visualsEntity.transform.position = serverEntityTransform.position;
+                    visualsEntity.transform.rotation = serverEntityTransform.rotation;
                 }
             }
         }

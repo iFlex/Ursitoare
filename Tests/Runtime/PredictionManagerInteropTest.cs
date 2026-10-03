@@ -5,12 +5,12 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 using Prediction.Components;
 using Prediction.Components.Controllers;
 using Prediction.Data;
-using Prediction.Interpolation;
 using Prediction.Resimulation.Detection;
 using Prediction.Tests.mocks;
 using UnityEngine;
@@ -37,6 +37,12 @@ namespace Prediction.Tests
         List<uint> stateEntitiesSentToClient = new List<uint>();
         //Objects created by individual tests outside of CreateEntities
         List<GameObject> extraGOs = new List<GameObject>();
+        //Every ownership message the server sent: (connId, entityId, controlledLocally)
+        List<(int connId, uint entityId, bool owned)> ownershipMessages = new List<(int, uint, bool)>();
+
+        //Optional second client (connection 2), created by CreateSecondClient
+        ClientPredictionManager managerClient2;
+        ClientPredictedEntity[] client2Entities;
 
         //TODO: these tests may not be relevant
         [SetUp]
@@ -49,6 +55,9 @@ namespace Prediction.Tests
             connections = Array.Empty<int>();
             stateTicksSentToClient.Clear();
             stateEntitiesSentToClient.Clear();
+            ownershipMessages.Clear();
+            managerClient2 = null;
+            client2Entities = null;
             physicsController = new MockPhysicsController();
             
             managerClient = new ClientPredictionManager(clientHeartbeatSenderBridge, clientStateSenderBridge);
@@ -67,6 +76,7 @@ namespace Prediction.Tests
             ServerPredictedEntity.BUFFER_FULL_THRESHOLD = serverBufferFullThreshold;
             managerServer.Clear();
             managerClient.Clear();
+            managerClient2?.Clear();
             DestroyAll(svVisuals);
             DestroyAll(clVisuals);
             DestroyAll(serverGOs);
@@ -103,9 +113,14 @@ namespace Prediction.Tests
 
         void ServerSetControlledLocally(int connId, uint entityId, bool controlledLocally)
         {
+            ownershipMessages.Add((connId, entityId, controlledLocally));
             if (connId == 1)
             {
                 managerClient.OnEntityOwnershipChanged(entityId, controlledLocally);
+            }
+            else if (connId == 2)
+            {
+                managerClient2?.OnEntityOwnershipChanged(entityId, controlledLocally);
             }
         }
 
@@ -250,7 +265,344 @@ namespace Prediction.Tests
             Assert.AreEqual(false, managerClient.IsControlledLocally(clientEntities[2]));
         }
         
-        //TODO: test swapping ownership, see that the buffers are cleared and new ticks are accepted correctly
+        #region OWNERSHIP BOOKKEEPING
+
+        //Connections ownership can be indexed under on the server. 0 is the server itself.
+        static readonly int[] KNOWN_CONNECTIONS = { 0, 1, 2, 3 };
+
+        public enum ReleaseMode
+        {
+            //UnsetOwnership(entity, owner): entity falls back to the server
+            ReleaseToServer,
+            //UnsetOwnership(entity): entity is left without an owner
+            Revoke,
+            //SetEntityOwner(entity, server)
+            GiveToServer,
+        }
+
+        void CreateSecondClient()
+        {
+            managerClient2 = new ClientPredictionManager(
+                tid => managerServer.OnHeartbeatReceived(2, tid),
+                (tid, entityId, record) => managerServer.OnClientStateReceived(2, tid, entityId, record));
+            managerClient2.SetPhysicsController(physicsController);
+
+            client2Entities = new ClientPredictedEntity[serverEntities.Length];
+            for (int i = 0; i < serverEntities.Length; ++i)
+            {
+                GameObject visuals = new GameObject("Client2Visual_" + i);
+                extraGOs.Add(visuals);
+                Rigidbody rb = CreateExtraBody("Client2_predicted_" + i);
+                client2Entities[i] = new ClientPredictedEntity((uint)i, false, BUFFER_SIZE, rb, visuals, Array.Empty<PredictableControllableComponent>(), Array.Empty<PredictableComponent>());
+                managerClient2.AddPredictedEntity(client2Entities[i]);
+            }
+        }
+
+        ClientPredictionManager ClientOf(int connId)
+        {
+            if (connId == 1)
+                return managerClient;
+            if (connId == 2)
+                return managerClient2;
+            return null;
+        }
+
+        ClientPredictedEntity[] ClientEntitiesOf(int connId)
+        {
+            return connId == 1 ? clientEntities : client2Entities;
+        }
+
+        HashSet<ServerPredictedEntity> OwnedOnServer(int connId)
+        {
+            return managerServer.GetEntitiesByOwner(connId) ?? new HashSet<ServerPredictedEntity>();
+        }
+
+        int MessagesTo(int connId, int entity, bool owned)
+        {
+            return ownershipMessages.Count(m => m.connId == connId && m.entityId == (uint)entity && m.owned == owned);
+        }
+
+        //Checks a single entity's owner is consistent across every server index and every client.
+        void AssertOwner(int i, int expectedOwner)
+        {
+            ServerPredictedEntity sv = serverEntities[i];
+            Assert.AreEqual(expectedOwner, managerServer.GetOwner(sv), $"Server owner of entity {i}");
+            Assert.AreEqual(expectedOwner == 0, managerServer.IsServerOwned(sv), $"Server owned flag of entity {i}");
+            foreach (int connId in KNOWN_CONNECTIONS)
+            {
+                Assert.AreEqual(connId == expectedOwner, OwnedOnServer(connId).Contains(sv), $"Entity {i} indexed under connection {connId} on the server");
+            }
+
+            foreach (int connId in new[] { 1, 2 })
+            {
+                ClientPredictionManager client = ClientOf(connId);
+                if (client == null)
+                    continue;
+
+                bool expected = connId == expectedOwner;
+                ClientPredictedEntity cl = ClientEntitiesOf(connId)[i];
+                Assert.AreEqual(expected, client.IsControlledLocally((uint)i), $"Client {connId} id ownership of entity {i}");
+                Assert.AreEqual(expected, client.IsControlledLocally(cl), $"Client {connId} local entity set contains entity {i}");
+                Assert.AreEqual(expected, cl.isControlledLocally, $"Client {connId} entity {i} isControlledLocally");
+            }
+        }
+
+        //Checks the full set of entities owned by a connection on the server and, for a client connection, on that client.
+        void AssertOwnedBy(int connId, params int[] entities)
+        {
+            CollectionAssert.AreEquivalent(entities.Select(i => serverEntities[i]), OwnedOnServer(connId), $"Server entities owned by connection {connId}");
+
+            ClientPredictionManager client = ClientOf(connId);
+            if (client == null)
+                return;
+
+            ClientPredictedEntity[] ents = ClientEntitiesOf(connId);
+            CollectionAssert.AreEquivalent(entities.Select(i => ents[i]), client.GetLocalEntities(), $"Client {connId} local entities");
+            Assert.AreEqual(entities.Length > 0, client.HasLocallyControlledEntities(), $"Client {connId} has locally controlled entities");
+        }
+
+        void Release(int i, int ownerId, ReleaseMode mode)
+        {
+            switch (mode)
+            {
+                case ReleaseMode.ReleaseToServer:
+                    managerServer.UnsetOwnership(serverEntities[i], ownerId);
+                    break;
+                case ReleaseMode.Revoke:
+                    managerServer.UnsetOwnership(serverEntities[i]);
+                    break;
+                case ReleaseMode.GiveToServer:
+                    managerServer.SetEntityOwner(serverEntities[i], 0);
+                    break;
+            }
+        }
+
+        [Test]
+        public void SetSameOwnerTwiceIsNoOpOnBothSides()
+        {
+            CreateEntities(2);
+            managerServer.SetEntityOwner(serverEntities[0], 1);
+            managerServer.OnClientStateReceived(1, 5, 0, new PredictionInputRecord(0, 0));
+            Assert.AreEqual(1, serverEntities[0].BufferFill(), "Test setup: owner input was not buffered");
+
+            managerServer.SetEntityOwner(serverEntities[0], 1);
+
+            AssertOwner(0, 1);
+            AssertOwner(1, -1);
+            AssertOwnedBy(1, 0);
+            Assert.AreEqual(1, MessagesTo(1, 0, true), "Ownership re-sent to the client");
+            Assert.AreEqual(0, MessagesTo(1, 0, false), "Client told it lost ownership");
+            //Re-setting the same owner must not reset the entity's input stream
+            Assert.AreEqual(1, serverEntities[0].BufferFill(), "Re-setting the same owner wiped the buffered client input");
+        }
+
+        [Test]
+        public void SetServerAsOwnerTwiceIsNoOp()
+        {
+            CreateEntities(1);
+            managerServer.SetEntityOwner(serverEntities[0], 0);
+            managerServer.SetEntityOwner(serverEntities[0], 0);
+
+            AssertOwner(0, 0);
+            AssertOwnedBy(0, 0);
+            AssertOwnedBy(1);
+            Assert.AreEqual(1, MessagesTo(0, 0, true));
+        }
+
+        [Test]
+        public void ReleaseOwnershipRepeatedlyStaysReleased()
+        {
+            CreateEntities(2);
+            managerServer.SetEntityOwner(serverEntities[0], 1);
+            managerServer.SetEntityOwner(serverEntities[1], 1);
+
+            for (int n = 0; n < 3; ++n)
+            {
+                managerServer.UnsetOwnership(serverEntities[0], 1);
+            }
+
+            AssertOwner(0, 0);
+            AssertOwner(1, 1);
+            AssertOwnedBy(0, 0);
+            AssertOwnedBy(1, 1);
+            Assert.AreEqual(1, MessagesTo(1, 0, false), "Client told more than once that it lost ownership");
+            Assert.AreEqual(1, MessagesTo(0, 0, true), "Entity handed back to the server more than once");
+
+            //Fully revoking the now server owned entity, also repeatedly
+            managerServer.UnsetOwnership(serverEntities[0]);
+            managerServer.UnsetOwnership(serverEntities[0]);
+
+            AssertOwner(0, -1);
+            AssertOwner(1, 1);
+            AssertOwnedBy(0);
+            AssertOwnedBy(1, 1);
+        }
+
+        [Test]
+        public void ReleaseOwnershipByNonOwnerIsIgnored()
+        {
+            CreateEntities(1);
+            managerServer.SetEntityOwner(serverEntities[0], 1);
+
+            managerServer.UnsetOwnership(serverEntities[0], 2);
+            managerServer.UnsetOwnership(serverEntities[0], 0);
+            managerServer.UnsetOwnership(serverEntities[0], -1);
+
+            AssertOwner(0, 1);
+            AssertOwnedBy(1, 0);
+            Assert.AreEqual(0, MessagesTo(1, 0, false));
+        }
+
+        [TestCase(ReleaseMode.ReleaseToServer, 0)]
+        [TestCase(ReleaseMode.Revoke, -1)]
+        [TestCase(ReleaseMode.GiveToServer, 0)]
+        public void MultipleEntitiesOwnedByOneClientReleasedOneByOne(ReleaseMode mode, int ownerAfterRelease)
+        {
+            CreateEntities(4);
+            for (int i = 0; i < 4; ++i)
+            {
+                managerServer.SetEntityOwner(serverEntities[i], 1);
+            }
+            AssertOwnedBy(1, 0, 1, 2, 3);
+
+            List<int> remaining = new List<int> { 0, 1, 2, 3 };
+            List<int> released = new List<int>();
+            foreach (int i in new[] { 1, 3, 0, 2 })
+            {
+                Release(i, 1, mode);
+                remaining.Remove(i);
+                released.Add(i);
+
+                AssertOwnedBy(1, remaining.ToArray());
+                foreach (int r in remaining)
+                    AssertOwner(r, 1);
+                foreach (int r in released)
+                    AssertOwner(r, ownerAfterRelease);
+                if (ownerAfterRelease == 0)
+                    AssertOwnedBy(0, released.ToArray());
+
+                Assert.DoesNotThrow(() => managerClient.Tick(), $"Client tick after releasing entity {i}");
+            }
+
+            Assert.AreEqual(false, managerClient.HasLocallyControlledEntities());
+            for (int i = 0; i < 4; ++i)
+            {
+                Assert.AreEqual(1, MessagesTo(1, i, true), $"Ownership grants for entity {i}");
+                Assert.AreEqual(1, MessagesTo(1, i, false), $"Ownership revokes for entity {i}");
+            }
+        }
+
+        [Test]
+        public void SomeEntitiesOfOneClientReassignedToAnotherClient()
+        {
+            CreateEntities(4);
+            CreateSecondClient();
+            for (int i = 0; i < 4; ++i)
+            {
+                managerServer.SetEntityOwner(serverEntities[i], 1);
+            }
+
+            managerServer.SetEntityOwner(serverEntities[1], 2);
+            managerServer.SetEntityOwner(serverEntities[3], 2);
+
+            AssertOwnedBy(1, 0, 2);
+            AssertOwnedBy(2, 1, 3);
+            AssertOwner(0, 1);
+            AssertOwner(1, 2);
+            AssertOwner(2, 1);
+            AssertOwner(3, 2);
+            Assert.AreEqual(1, MessagesTo(1, 1, false));
+            Assert.AreEqual(1, MessagesTo(1, 3, false));
+            Assert.AreEqual(1, MessagesTo(2, 1, true));
+            Assert.AreEqual(1, MessagesTo(2, 3, true));
+
+            //Each client drives exactly the entities it owns, and the server accepts each of those inputs
+            uint[] updatesBefore = serverEntities.Select(e => e.clUpdateCount).ToArray();
+            Assert.DoesNotThrow(() => managerClient.Tick());
+            Assert.DoesNotThrow(() => managerClient2.Tick());
+            for (int i = 0; i < 4; ++i)
+            {
+                Assert.AreEqual(updatesBefore[i] + 1, serverEntities[i].clUpdateCount, $"Server accepted input for entity {i}");
+            }
+
+            //Partially swap back
+            managerServer.SetEntityOwner(serverEntities[1], 1);
+            managerServer.SetEntityOwner(serverEntities[0], 2);
+
+            AssertOwnedBy(1, 1, 2);
+            AssertOwnedBy(2, 0, 3);
+            for (int i = 0; i < 4; ++i)
+            {
+                AssertOwner(i, i == 0 || i == 3 ? 2 : 1);
+            }
+
+            //Second client hands everything back to the server
+            managerServer.UnsetOwnership(serverEntities[0], 2);
+            managerServer.UnsetOwnership(serverEntities[3], 2);
+
+            AssertOwnedBy(1, 1, 2);
+            AssertOwnedBy(2);
+            AssertOwnedBy(0, 0, 3);
+            Assert.DoesNotThrow(() => managerClient2.Tick());
+        }
+
+        [Test]
+        public void OwnershipPingPongBetweenClientsEndsConsistent()
+        {
+            const int ROUNDS = 5;
+            CreateEntities(2);
+            CreateSecondClient();
+            managerServer.SetEntityOwner(serverEntities[1], 1);
+
+            for (int n = 0; n < ROUNDS; ++n)
+            {
+                managerServer.SetEntityOwner(serverEntities[0], 1);
+                managerServer.SetEntityOwner(serverEntities[0], 2);
+            }
+
+            AssertOwner(0, 2);
+            AssertOwner(1, 1);
+            AssertOwnedBy(1, 1);
+            AssertOwnedBy(2, 0);
+            Assert.AreEqual(ROUNDS, MessagesTo(1, 0, true));
+            Assert.AreEqual(ROUNDS, MessagesTo(1, 0, false));
+            Assert.AreEqual(ROUNDS, MessagesTo(2, 0, true));
+            Assert.AreEqual(ROUNDS - 1, MessagesTo(2, 0, false));
+        }
+
+        [Test]
+        public void TransferredEntityClearsInputStreamAndAcceptsNewOwnerTicks()
+        {
+            ServerPredictedEntity.USE_BUFFERING = false;
+            CreateEntities(1);
+            PredictionInputRecord input = new PredictionInputRecord(0, 0);
+            ServerPredictedEntity sv = serverEntities[0];
+
+            managerServer.SetEntityOwner(sv, 1);
+            managerServer.OnClientStateReceived(1, 100, 0, input);
+            managerServer.Tick();
+            managerServer.OnClientStateReceived(1, 101, 0, input);
+            Assert.AreEqual(100, sv.GetClientTickId(), "Test setup: server did not apply the first owner's input");
+            Assert.AreEqual(1, sv.BufferFill(), "Test setup: first owner's next input was not buffered");
+
+            managerServer.SetEntityOwner(sv, 2);
+            Assert.AreEqual(0, sv.BufferFill(), "Previous owner's buffered input survived the transfer");
+            Assert.AreEqual(0, sv.GetClientTickId(), "Previous owner's tick id survived the transfer");
+
+            //New owner's tick ids are unrelated to the previous owner's and must not be treated as late
+            managerServer.OnClientStateReceived(2, 5, 0, input);
+            Assert.AreEqual(1, sv.BufferFill(), "New owner's input rejected");
+            Assert.AreEqual(0, sv.lateTickCount, "New owner's input treated as late");
+
+            //Previous owner is no longer accepted
+            managerServer.OnClientStateReceived(1, 102, 0, input);
+            Assert.AreEqual(1, sv.BufferFill(), "Previous owner's input accepted after the transfer");
+
+            managerServer.Tick();
+            Assert.AreEqual(5, sv.GetClientTickId());
+        }
+
+        #endregion
 
         //NOTE: the following tests cover a client removing an entity it controls locally before the server revokes
         //      the ownership (e.g. the client destroys a networked rocket on its own). In the field this left the
@@ -631,6 +983,7 @@ namespace Prediction.Tests
             CollectionAssert.Contains(stateEntitiesSentToClient, 0u, "Healthy entity state was not sent to the client");
         }
 
+        //TODO: more tests
         /*
          
         [Test]

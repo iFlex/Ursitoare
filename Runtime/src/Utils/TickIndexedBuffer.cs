@@ -5,6 +5,7 @@ using System.Collections.Generic;
 
 namespace Prediction.Utils
 {
+    //TODO: implement an efficient version of this
     public class TickIndexedBuffer<T>
     {
         public T emptyValue = default(T);
@@ -64,6 +65,12 @@ namespace Prediction.Utils
         
         public void Add(uint tickId, T item)
         {
+            if (storage.ContainsKey(tickId))
+            {
+                storage[tickId] = item;
+                return;
+            }
+            
             if (GetFill() == capacity)
             {
                 PopOldest();
