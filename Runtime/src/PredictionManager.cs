@@ -19,9 +19,8 @@ namespace Prediction
         public static bool LOG_TIMING = false;
         public static bool DO_RESIM = true;
         public static bool DO_SNAP = true;
-        
-        public static bool IGNORE_NON_AUTH_RESIM_DECISIONS = false;
-        public static bool IGNORE_CONTROLLABLE_FOLLOWER_DECISIONS = true;
+
+        public static bool PREDICT_FOLLOWERS = true;
         public static bool LOG_PRE_SIM_STATE = false;
         public static bool PREDICTION_ENABLED = true;
         //FUDO: we might not need the RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD, it gives some good flexibilty for now.

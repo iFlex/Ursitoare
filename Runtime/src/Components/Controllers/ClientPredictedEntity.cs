@@ -2,7 +2,6 @@
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
 using System;
-using System.Collections.Generic;
 using Sector0.Events;
 using Prediction.Data;
 using Prediction.Resimulation.Detection;
@@ -81,7 +80,7 @@ namespace Prediction.Components.Controllers
         private uint localHistoryStartTickId = 0;
         private uint localHistoryTicksProcessed = 0;
         
-        private Dictionary<uint, uint> tickResimCounter = new Dictionary<uint, uint>();
+        private TickIndexedBuffer<uint> tickResimCounter;
         private bool isCurrentStateSpeculative = false;
         private PhysicsStateRecord prevResimState;
         private SimpleConfigurableResimulationDecider resimDesyncComparator = new SimpleConfigurableResimulationDecider(float.MinValue, float.MinValue, float.MinValue, float.MinValue);
@@ -135,6 +134,9 @@ namespace Prediction.Components.Controllers
                 localStateBuffer.Add(PhysicsStateRecord.AllocWithComponentState(totalStateFloats, totalStateBools));
             }
             prevResimState = PhysicsStateRecord.AllocWithComponentState(totalStateFloats, totalStateBools);
+            
+            tickResimCounter = new TickIndexedBuffer<uint>(bufferSize);
+            tickResimCounter.emptyValue = 0;
         }
         
         public void SetCustomEligibilityCheckHandler(Func<uint, uint, RingBuffer<PhysicsStateRecord>, TickIndexedBuffer<PhysicsStateRecord>, PredictionDecision> handler)
@@ -347,7 +349,7 @@ namespace Prediction.Components.Controllers
             
             lastCheckedServerTickId = serverState.tickId;
             fromTick = serverState.tickId;
-            if (TRUST_ALREADY_RESIMULATED_TICKS && tickResimCounter.GetValueOrDefault(serverState.tickId, 0u) > 1)
+            if (TRUST_ALREADY_RESIMULATED_TICKS && tickResimCounter.Get(serverState.tickId) > 1)
             {
                 //TODO: toggle this log
                 Debug.Log($"[RESIMULATION][SKIP_CHECK] i:{id} t:{lastAppliedTick} st:{serverState.tickId}");
@@ -531,8 +533,8 @@ namespace Prediction.Components.Controllers
             //TODO: check conversion to int
             preSampleState.Dispatch(true);
             PhysicsStateRecord record = localStateBuffer.Get((int) tickId);
-            resimCounter = tickResimCounter.GetValueOrDefault(tickId, 0u) + 1;
-            tickResimCounter[tickId] = resimCounter;
+            resimCounter = tickResimCounter.Get(tickId) + 1;
+            tickResimCounter.Add(tickId, resimCounter);
 
             if (isControlledLocally && TRACK_RESIM_DISCREPANCIES)
             {

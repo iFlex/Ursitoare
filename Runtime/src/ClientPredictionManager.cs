@@ -259,10 +259,7 @@ namespace Prediction
         
         bool ShouldIgnoreResimulationDecision(ClientPredictedEntity entity)
         {
-            //TODO: clarify first case. what is it for?
-            return (IGNORE_NON_AUTH_RESIM_DECISIONS && IsFollower(entity)) ||
-                   (IGNORE_CONTROLLABLE_FOLLOWER_DECISIONS && entity.IsControllable() && IsFollower(entity)) ||
-                   (IsFollower(entity) && !entity.predictAsFollower);
+            return IsFollower(entity) && !entity.predictAsFollower;
         }
 
         float GetMinSqrDistToAllLocalEnts()
@@ -303,10 +300,10 @@ namespace Prediction
             }
             if (RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD == 0)
             {
-                ent.predictAsFollower = true;
+                ent.predictAsFollower = PREDICT_FOLLOWERS;
                 return;
             }
-            ent.predictAsFollower = sqrDistance < RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD;
+            ent.predictAsFollower = PREDICT_FOLLOWERS && sqrDistance < RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD;
         }
         
         //TODO: package private
