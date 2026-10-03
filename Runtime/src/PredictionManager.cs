@@ -29,6 +29,7 @@ namespace Prediction
         public static float RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 0;
         public static bool TRACK_TIMING_STATS = true;
         public static int MISSING_PACKETS_BUFFER_SIZE = 10;
+        public static int RESIM_TICK_COUNT_BUFFER_SIZE = 30;
         public static bool TRACK_PACKET_LOSS = true;
         
         public static int CLIENT_RTT_MEASUREMENTS_BUFFER_SIZE = 20;
@@ -92,7 +93,6 @@ namespace Prediction
         public bool resimUseAvailableServerTicks = true;
         public bool correctWholeWorldWhenResimulating = true;
         public uint resimSkipNotEnoughHistory = 0;
-        public bool resimulating = false;
         public uint maxRewindDistance = 0;
         public uint totalRewindDistance = 0;
         
