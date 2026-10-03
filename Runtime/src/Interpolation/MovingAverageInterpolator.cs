@@ -294,8 +294,11 @@ namespace Prediction.Interpolation
             }
         }
         
-        public static float GetBufferEndAngle(RingBuffer<PhysicsStateRecord> bfr) 
+        public static float GetBufferEndAngle(RingBuffer<PhysicsStateRecord> bfr)
         {
+            if (bfr.GetFill() < 2)
+                return 0;
+            
             Vector3 crntDir = GetDirVector(GetWithOffset(bfr, -1), bfr.GetEnd());
             Vector3 pastDir = GetDirVector(GetWithOffset(bfr, -2), GetWithOffset(bfr, -1));
             return Mathf.Abs(Vector3.Angle(crntDir, pastDir));
@@ -378,6 +381,7 @@ namespace Prediction.Interpolation
         public void Reset()
         {
             buffer.Clear();
+            //TODO: why not reset averagedBuffer too?
         }
 
         public void SetControlledLocally(bool isLocalAuthority)

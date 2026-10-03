@@ -2,8 +2,10 @@
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
 #if UNITY_EDITOR
+using System;
 using System.Collections.Generic;
 using NUnit.Framework;
+using Prediction.Components;
 using Prediction.Components.Controllers;
 using Prediction.Data;
 using Prediction.Resimulation.Detection;
@@ -371,6 +373,183 @@ namespace Prediction.Tests
 
             Assert.AreNotEqual(PredictionDecision.SIMULATION_FREEZE, decision);
             Assert.AreEqual(6u, fromTick);
+        }
+
+        //NOTE: SnapToServer falls back to the local history when the server has no state for the tick. The local
+        //      buffer is indexed by tick % size, so the fallback must not use a slot holding a different tick.
+        [Test]
+        public void SnapToServerWithoutAnyHistoryForTickDoesNotMoveEntity()
+        {
+            Vector3 position = new Vector3(5, 0, 0);
+            rigidbody.position = position;
+            for (uint tickId = 41; tickId <= 43; ++tickId)
+            {
+                entity.SamplePhysicsState(tickId);
+            }
+
+            //Slot 5 was never written (pre-allocated empty record at the origin)
+            entity.SnapToServer(5);
+
+            Assert.AreEqual(position, rigidbody.position);
+        }
+
+        [Test]
+        public void SnapToServerDoesNotUseOverwrittenHistorySlot()
+        {
+            rigidbody.position = new Vector3(5, 0, 0);
+            for (uint tickId = 41; tickId <= 43; ++tickId)
+            {
+                entity.SamplePhysicsState(tickId);
+            }
+            Vector3 current = new Vector3(7, 0, 0);
+            rigidbody.position = current;
+
+            //Slot for tick 21 (21 % 20 = 1) now holds tick 41
+            entity.SnapToServer(21);
+
+            Assert.AreEqual(current, rigidbody.position);
+        }
+
+        [Test]
+        public void GapInServerStreamIsReported()
+        {
+            List<ClientPredictedEntity.DesyncEvent> desyncs = new List<ClientPredictedEntity.DesyncEvent>();
+            entity.potentialDesync.AddEventListener(desyncs.Add);
+            SimulateTicksToOverflowHistory(12);
+
+            entity.BufferServerTick(12, MakeServerState(5));
+            entity.GetPredictionDecision(13, out uint _);
+            //Server ticks 6..9 never arrived
+            entity.BufferServerTick(13, MakeServerState(10));
+            entity.GetPredictionDecision(13, out uint _);
+
+            Assert.IsTrue(desyncs.Exists(d => d.reason == ClientPredictedEntity.DesyncReason.GAP_IN_SERVER_STREAM && d.gapSize == 5),
+                "Gap between server ticks 5 and 10 was not reported");
+        }
+
+        [Test]
+        public void ServerDelayIsZeroWhenServerIsAheadOfClient()
+        {
+            //e.g. right after a Reset, the server stream is ahead of the local tick
+            entity.BufferServerTick(0, MakeServerState(50));
+            entity.ClientSimulationTick(10);
+
+            Assert.AreEqual(0u, entity.GetServerDelay());
+            Assert.AreEqual(0u, entity.maxServerDelay);
+        }
+
+        [Test]
+        public void DisablingPredictionSnapsLocalEntityToServerState()
+        {
+            //NOTE: must follow the flag the prediction tick uses (PredictionMngr), not the legacy PredictionManager one
+            bool predictionEnabled = PredictionManager.PREDICTION_ENABLED;
+            try
+            {
+                PredictionManager.PREDICTION_ENABLED = false;
+                rigidbody.position = Vector3.zero;
+                entity.ClientSimulationTick(1);
+                entity.SamplePhysicsState(1);
+
+                PhysicsStateRecord serverState = PhysicsStateRecord.Alloc();
+                serverState.tickId = 1;
+                serverState.position = new Vector3(3, 0, 0);
+                entity.BufferServerTick(1, serverState);
+
+                Assert.AreEqual(serverState.position, rigidbody.position);
+            }
+            finally
+            {
+                PredictionManager.PREDICTION_ENABLED = predictionEnabled;
+            }
+        }
+
+        //NOTE: each component must write exactly the number of inputs it declares. Otherwise the inputs of the following
+        //      components shift (or keep stale values) and the server loads different values than the client sampled.
+        class MisreportingComponent : PredictableControllableComponent, PredictableComponent
+        {
+            public int declaredFloats;
+            public int writtenFloats;
+
+            public int GetFloatInputCount()
+            {
+                return declaredFloats;
+            }
+
+            public int GetBinaryInputCount()
+            {
+                return 0;
+            }
+
+            public void SampleInput(PredictionInputRecord input)
+            {
+                for (int i = 0; i < writtenFloats; i++)
+                {
+                    input.WriteNextScalar(i);
+                }
+            }
+
+            public bool ValidateInput(float deltaTime, PredictionInputRecord input)
+            {
+                return true;
+            }
+
+            public void LoadInput(PredictionInputRecord input)
+            {
+            }
+
+            public void ClearInput()
+            {
+            }
+
+            public void ApplyForces()
+            {
+            }
+
+            public bool HasState()
+            {
+                return false;
+            }
+
+            public void SampleComponentState(PhysicsStateRecord physicsStateRecord)
+            {
+            }
+
+            public void LoadComponentState(PhysicsStateRecord physicsStateRecord)
+            {
+            }
+
+            public int GetStateFloatCount()
+            {
+                return 0;
+            }
+
+            public int GetStateBoolCount()
+            {
+                return 0;
+            }
+        }
+
+        ClientPredictedEntity CreateEntityWith(MisreportingComponent misreporting)
+        {
+            return new ClientPredictedEntity(1, false, 20, rigidbody, test, new PredictableControllableComponent[] { misreporting }, new PredictableComponent[] { misreporting });
+        }
+
+        [Test]
+        public void ComponentWritingMoreInputsThanDeclaredIsRejected()
+        {
+            ClientPredictedEntity misreporting = CreateEntityWith(new MisreportingComponent { declaredFloats = 2, writtenFloats = 3 });
+            misreporting.SetControlledLocally(true);
+
+            Assert.Catch<Exception>(() => misreporting.SampleInput(1));
+        }
+
+        [Test]
+        public void ComponentWritingFewerInputsThanDeclaredIsRejected()
+        {
+            ClientPredictedEntity misreporting = CreateEntityWith(new MisreportingComponent { declaredFloats = 2, writtenFloats = 1 });
+            misreporting.SetControlledLocally(true);
+
+            Assert.Catch<Exception>(() => misreporting.SampleInput(1));
         }
     }
 }

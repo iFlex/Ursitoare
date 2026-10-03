@@ -173,5 +173,15 @@ namespace Prediction.Components.Controllers
         {
             return totalStateBools;
         }
+        
+        public int GetFloatInputCount()
+        {
+            return totalFloatInputs;
+        }
+
+        public int GetBinaryInputCount()
+        {
+            return totalBinaryInputs;
+        }
     }
 }

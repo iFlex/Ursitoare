@@ -10,6 +10,26 @@ namespace Prediction.Tests
     public class TickIndexedBufferTest
     {
         [Test]
+        public void OverwritingExistingTickWhenFullDoesNotEvictOldest()
+        {
+            TickIndexedBuffer<int> test = new TickIndexedBuffer<int>(3);
+            test.Add(1, 10);
+            test.Add(2, 20);
+            test.Add(3, 30);
+
+            //Rewrite of a tick already in the buffer (e.g. ALLOW_SERVER_HISTORY_REWRITES)
+            test.Add(2, 21);
+
+            Assert.AreEqual(3, test.GetFill());
+            Assert.AreEqual(1u, test.GetStartTick());
+            Assert.AreEqual(3u, test.GetEndTick());
+            Assert.AreEqual(true, test.Contains(1));
+            Assert.AreEqual(10, test.Get(1));
+            Assert.AreEqual(21, test.Get(2));
+            Assert.AreEqual(30, test.Get(3));
+        }
+
+        [Test]
         public void TestAddAndRetrieve()
         {
             TickIndexedBuffer<int> test = new TickIndexedBuffer<int>(5);

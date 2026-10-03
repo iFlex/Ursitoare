@@ -18,6 +18,14 @@ namespace Prediction.Data
         
         //NOTE: DO NOT USE THE DEFAULT CONSTRUCTOR. DIDNT MAKE IT PRIVATE SO MIRROR CAN SERIALIZE THIS ENTITY
         
+        public static PhysicsStateRecord AllocWithComponentStateAndInput(int componentFloats, int componentBools, int inputFloats, int inputBools)
+        {
+            PhysicsStateRecord psr = Empty();
+            psr.input = new PredictionInputRecord(inputFloats, inputBools);
+            psr.componentState = new PredictionInputRecord(componentFloats, componentBools);
+            return psr;
+        }
+        
         public static PhysicsStateRecord AllocWithComponentState(int componentFloats, int componentBools)
         {
             PhysicsStateRecord psr = Empty();

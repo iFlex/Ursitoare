@@ -474,6 +474,26 @@ namespace Prediction.Tests
             Assert.AreEqual(4, entity.totalMissingInputTicks);
         }
         
+
+        [Test]
+        public void TestAppliedInputStaysAttachedWhileNoNewInputArrives()
+        {
+            entity.BufferClientTick(1, reports[1]);
+            entity.ServerSimulationTick();
+            Assert.AreSame(reports[1], entity.SamplePhysicsState(1).input);
+
+            //The owner went quiet. The server keeps applying the last input, so it keeps reporting it.
+            for (uint i = 2; i < 5; i++)
+            {
+                entity.ServerSimulationTick();
+                Assert.AreSame(reports[1], entity.SamplePhysicsState(i).input);
+            }
+
+            entity.BufferClientTick(2, reports[2]);
+            entity.ServerSimulationTick();
+            Assert.AreSame(reports[2], entity.SamplePhysicsState(5).input);
+        }
+
         [Test]
         public void TestBufferNeverSkipAheadDuringNormalOp()
         {

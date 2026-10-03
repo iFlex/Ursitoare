@@ -101,11 +101,68 @@ namespace Prediction.Tests.simulation
             Assert.AreEqual(expected.velocity, body.linearVelocity);
             Assert.AreEqual(expected.angularVelocity, body.angularVelocity);
         }
-        
-        //TODO: try to resimulate too far in the past
+
+        Rigidbody CreateBody(string name, Vector3 position)
+        {
+            GameObject go = new GameObject(name);
+            go.transform.position = position;
+            Rigidbody body = go.AddComponent<Rigidbody>();
+            body.useGravity = false;
+            return body;
+        }
+
+        [Test]
+        public void RewindToBeforeBodyWasTrackedDoesNotMoveIt()
+        {
+            //NOTE: e.g. an entity spawned after the tick a resimulation starts from. Its history for that tick is empty
+            //      and restoring it would teleport the body to the origin with zero velocity.
+            controller.Setup(false);
+            Rigidbody early = CreateBody("early", Vector3.zero);
+            controller.Track(early);
+            for (int i = 0; i < 5; ++i)
+                controller.Simulate();
+
+            Rigidbody spawned = CreateBody("spawned", new Vector3(10, 5, 0));
+            spawned.linearVelocity = Vector3.forward;
+            controller.Track(spawned);
+            for (int i = 0; i < 3; ++i)
+                controller.Simulate();
+
+            PhysicsStateRecord beforeRewind = PhysicsStateRecord.Alloc();
+            beforeRewind.From(spawned);
+
+            //Rewind to tick 4, spawned only has history from tick 6 onwards
+            Assert.AreEqual(9, controller.GetTick());
+            Assert.IsTrue(controller.Rewind(5));
+            AssertEqualState(spawned, beforeRewind);
+
+            GameObject.DestroyImmediate(early.gameObject);
+            GameObject.DestroyImmediate(spawned.gameObject);
+        }
+
+        [Test]
+        public void RewindBeyondHistoryIsRefused()
+        {
+            controller = new RewindablePhysicsController(10);
+            controller.Setup(false);
+            Rigidbody body = CreateBody("body", new Vector3(1, 2, 3));
+            controller.Track(body);
+            for (int i = 0; i < 25; ++i)
+                controller.Simulate();
+
+            PhysicsStateRecord beforeRewind = PhysicsStateRecord.Alloc();
+            beforeRewind.From(body);
+
+            //History only holds the last 10 ticks, tick 11 slot has been overwritten by tick 21
+            Assert.IsFalse(controller.Rewind(15));
+            Assert.AreEqual(26, controller.GetTick());
+            AssertEqualState(body, beforeRewind);
+
+            GameObject.DestroyImmediate(body.gameObject);
+        }
+
         //TODO: try to resimulate 1 step behind
         //TODO: try to resimulate with object despawn
-        //TODO: try to resimulate with object spawn
     }
 }
 #endif
