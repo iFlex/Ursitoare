@@ -14,7 +14,7 @@ namespace Prediction.Components.Controllers
     public class ClientPredictedEntity : AbstractPredictedEntity
     {
         public static bool DEBUG = false;
-        public static bool LOG_ADDED_SERVER_STATES = true;
+        public static bool LOG_ADDED_SERVER_STATES = false;
         public static bool LOG_USED_INPUTS = false;
         public static bool TRUST_ALREADY_RESIMULATED_TICKS = false;
         public static bool APPLY_SERVER_INPUT_TO_FOLLOWERS = true;
@@ -22,7 +22,7 @@ namespace Prediction.Components.Controllers
         public static bool LOG_VELOCITIES_ALL = false;
         public static bool TRACK_RESIM_DISCREPANCIES = true;
         public static bool ALLOW_SERVER_HISTORY_REWRITES = false;
-        public static bool LOG_RESIMULATION_STEPS = true;
+        public static bool LOG_RESIMULATION_STEPS = false;
 
         //STATE TRACKING
         public GameObject gameObject;
@@ -102,12 +102,14 @@ namespace Prediction.Components.Controllers
 
         ~ClientPredictedEntity()
         {
-            Debug.Log($"[ClientPredictedEntity] Destructor");
+            if (PredictionManager.LOG_EVENTS)
+                Debug.Log($"[ClientPredictedEntity] Destructor");
         }
         
         public ClientPredictedEntity(uint id, bool isServer, int bufferSize, Rigidbody rb, GameObject visuals, PredictableControllableComponent[] controllablePredictionContributors, PredictableComponent[] predictionContributors) : base(id, rb, visuals, controllablePredictionContributors, predictionContributors)
         {
-            Debug.Log($"[ClientPredictedEntity] Constructor");
+            if (PredictionManager.LOG_EVENTS)
+                Debug.Log($"[ClientPredictedEntity] Constructor");
             rigidbody = rb;
             gameObject = rb.gameObject;
             detachedVisualsIdentity = visuals;
@@ -351,8 +353,8 @@ namespace Prediction.Components.Controllers
             fromTick = serverState.tickId;
             if (TRUST_ALREADY_RESIMULATED_TICKS && tickResimCounter.Get(serverState.tickId) > 1)
             {
-                //TODO: toggle this log
-                Debug.Log($"[RESIMULATION][SKIP_CHECK] i:{id} t:{lastAppliedTick} st:{serverState.tickId}");
+                if (DEBUG)
+                    Debug.Log($"[RESIMULATION][SKIP_CHECK] i:{id} t:{lastAppliedTick} st:{serverState.tickId}");
                 return PredictionDecision.NOOP;
             }
             

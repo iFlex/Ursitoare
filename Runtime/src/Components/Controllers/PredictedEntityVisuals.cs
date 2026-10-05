@@ -86,7 +86,8 @@ namespace Prediction.Components.Controllers
 
         public void Destroy(bool ignore)
         {
-            Debug.Log($"[PredictedEntityVisuals][Destroy]");
+            if (PredictionManager.LOG_EVENTS)
+                Debug.Log($"[PredictedEntityVisuals][Destroy]");
             if (visualsEntity)
             {
                 GameObject.Destroy(visualsEntity);

@@ -13,8 +13,8 @@ namespace Prediction.Interpolation
     //TODO: do we need a common interpolator class with the buffering logic? can this live in the visuals class?
     public class MovingAverageInterpolator: VisualsInterpolationsProvider
     {
-        public static bool DEBUG = true;
-        public static bool LOG_POS = true;
+        public static bool DEBUG = false;
+        public static bool LOG_POS = false;
         public static bool DEEP_DEBUG = false;
         public static int DEBUG_COUNTER = 0;
         public static int FOLLOWER_SMOOTH_WINDOW = 4;
@@ -84,7 +84,8 @@ namespace Prediction.Interpolation
                 GetNextInterpolationTarget(time, out PhysicsStateRecord from, out PhysicsStateRecord to, out float interpTarget, out bool hasFrame);
                 if (!hasFrame)
                 {
-                    Debug.Log($"[CustomVisualInterpolator][Update][LERP]({target.gameObject.GetInstanceID()})({debugCounterLocal}) WARNING. no data! time:{time} dTime:{deltaTime} startTime:{GetTime(GetInterpolationBuffer().GetStart())} fill:{GetInterpolationBuffer().GetFill()}");
+                    if (DEBUG)
+                        Debug.Log($"[CustomVisualInterpolator][Update][LERP]({target.gameObject.GetInstanceID()})({debugCounterLocal}) WARNING. no data! time:{time} dTime:{deltaTime} startTime:{GetTime(GetInterpolationBuffer().GetStart())} fill:{GetInterpolationBuffer().GetFill()}");
                     return;
                 }
                 
@@ -105,7 +106,8 @@ namespace Prediction.Interpolation
                 
                     target.position = Vector3.Lerp(target.position, to.position, t);
                     target.rotation = Quaternion.Slerp(target.rotation, to.rotation, t);
-                    _posAnalyser.LogAndPrintPosRot("SELF_LERP", target.position, target.rotation);
+                    if (DEBUG)
+                        _posAnalyser.LogAndPrintPosRot("SELF_LERP", target.position, target.rotation);
                 }
                 else
                 {
@@ -114,7 +116,8 @@ namespace Prediction.Interpolation
                 
                 if (interpTarget == 1f)
                 {
-                    Debug.Log($"[CustomVisualInterpolator][ApplyState] NOT_ENOUGH_DATA_IN_BUFFER, this shouldn't be possible... Time has be set to end of buffer in waiting for more data");
+                    if (DEBUG)
+                        Debug.Log($"[CustomVisualInterpolator][ApplyState] NOT_ENOUGH_DATA_IN_BUFFER, this shouldn't be possible... Time has be set to end of buffer in waiting for more data");
                     time = GetTime(to);
                 }
                 time += deltaTime;
@@ -151,7 +154,8 @@ namespace Prediction.Interpolation
             }
             
             //TODO: apply rotation in relation to own current rotation as experiment
-            _posAnalyser.LogAndPrintPosRot("SELF_LERP", target.position, target.rotation);
+            if (DEBUG)
+                _posAnalyser.LogAndPrintPosRot("SELF_LERP", target.position, target.rotation);
             if (DEBUG)
             {
                 float dist = (target.position - pos).magnitude;
@@ -214,7 +218,8 @@ namespace Prediction.Interpolation
                     t = (float)((time - GetTime(from)) / tickInterval);
                     if (t < 0)
                     {
-                        Debug.Log($"[CustomVisualInterpolator][GetNextInterpolationTarget] negative interpolation target:{t}");
+                        if (DEBUG)
+                            Debug.Log($"[CustomVisualInterpolator][GetNextInterpolationTarget] negative interpolation target:{t}");
                         t = 0;
                     }
                     hasFrame = true;
@@ -228,7 +233,8 @@ namespace Prediction.Interpolation
             
             t = 1;
             hasFrame = from != null && to != null;
-            Debug.Log($"[CustomVisualInterpolator][GetNextInterpolationTarget][TIME_PAST_END_OF_BFR] time:{time} toT:{(to == null ? "X" :GetTime(to))} fromT:{(from == null ? "X": GetTime(from))} startT:{(GetInterpolationBuffer().GetFill() == 0 ? "X" : GetTime(GetInterpolationBuffer().GetStart()))} fill:{GetInterpolationBuffer().GetFill()}");
+            if (DEBUG)
+                Debug.Log($"[CustomVisualInterpolator][GetNextInterpolationTarget][TIME_PAST_END_OF_BFR] time:{time} toT:{(to == null ? "X" :GetTime(to))} fromT:{(from == null ? "X": GetTime(from))} startT:{(GetInterpolationBuffer().GetFill() == 0 ? "X" : GetTime(GetInterpolationBuffer().GetStart()))} fill:{GetInterpolationBuffer().GetFill()}");
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -256,10 +262,11 @@ namespace Prediction.Interpolation
             }
             
             double deltaAdd = totalTime - lastAddTime;
-            if (deltaAdd > Time.fixedDeltaTime) 
+            if (deltaAdd > Time.fixedDeltaTime)
             {
                 float percent = (float)(deltaAdd / Time.fixedDeltaTime);
-                Debug.Log($"[CustomVisualInterpolator][DT_DBG][LATE_ADD] t:{record.tickId} deltaTime:{deltaAdd} shouldBe:{Time.fixedDeltaTime} missBy:{deltaAdd - Time.fixedDeltaTime} p:{percent}");
+                if (DEBUG)
+                    Debug.Log($"[CustomVisualInterpolator][DT_DBG][LATE_ADD] t:{record.tickId} deltaTime:{deltaAdd} shouldBe:{Time.fixedDeltaTime} missBy:{deltaAdd - Time.fixedDeltaTime} p:{percent}");
             }
             lastAddTime = totalTime;
             

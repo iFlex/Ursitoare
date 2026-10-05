@@ -119,7 +119,8 @@ namespace Prediction
                 return;
 
             uint id = entity.id;
-            Debug.Log($"[PredictionManager][AddPredictedEntity] CLIENT ({id})=>({entity})");
+            if (DEBUG || LOG_EVENTS)
+                Debug.Log($"[PredictionManager][AddPredictedEntity] CLIENT ({id})=>({entity})");
             
             _clientEntities[id] = entity;
             AddPredictedEntity(entity.gameObject);
@@ -162,7 +163,7 @@ namespace Prediction
         //TODO: unit test
         void SetLocalEntity(uint id)
         {
-            if (DEBUG || DEBUG_OWNERSHIP)
+            if (DEBUG || DEBUG_OWNERSHIP || LOG_EVENTS)
                 Debug.Log($"[PredictionManager][Ownership][SetLocalEntity] entityId:{id} controlledLocally:{IsControlledLocally(id)}");
 
             if (IsControlledLocally(id))
@@ -170,7 +171,7 @@ namespace Prediction
             localEntityId.Add(id);
             
             var newLocalEntity = _clientEntities.GetValueOrDefault(id, null);
-            if (DEBUG || DEBUG_OWNERSHIP)
+            if (DEBUG || DEBUG_OWNERSHIP || LOG_EVENTS)
                 Debug.Log($"[PredictionManager][Ownership][SetLocalEntity] entityId:{id} entityInstance:{newLocalEntity}|");
             
             if (newLocalEntity != null)
@@ -184,7 +185,7 @@ namespace Prediction
         //TODO: unit test
         void UnsetLocalEntity(uint id)
         {
-            if (DEBUG || DEBUG_OWNERSHIP)
+            if (DEBUG || DEBUG_OWNERSHIP || LOG_EVENTS)
                 Debug.Log($"[PredictionManager][Ownership][UnsetLocalEntity] entityId:{id} controlledLocally:{IsControlledLocally(id)}");
             
             if (IsControlledLocally(id))
@@ -192,7 +193,7 @@ namespace Prediction
                 localEntityId.Remove(id);
                 
                 var remEnt = _clientEntities.GetValueOrDefault(id, null);
-                if (DEBUG || DEBUG_OWNERSHIP)
+                if (DEBUG || DEBUG_OWNERSHIP || LOG_EVENTS)
                     Debug.Log($"[PredictionManager][Ownership][UnsetLocalEntity] entityId:{id} entityInstance:{remEnt}|");
                 
                 if (remEnt != null)
@@ -269,7 +270,8 @@ namespace Prediction
             {
                 if (!ent.gameObject)
                 {
-                    Debug.LogError($"[ClientPredictionManager][GetMinSqrDistToAllLocalEnts] NULL_PREDICTED_GAME_OBJECT. id:{ent.id}");
+                    if (LOG_ERRORS)
+                        Debug.LogError($"[ClientPredictionManager][GetMinSqrDistToAllLocalEnts] NULL_PREDICTED_GAME_OBJECT. id:{ent.id}");
                     continue;
                 }
                 
@@ -320,7 +322,8 @@ namespace Prediction
             {
                 if (!pair.Value.gameObject)
                 {
-                    Debug.LogError($"[ClientPredictionManager][ComputePredictionDecision] NULL_PREDICTED_GAME_OBJECT. id:{pair.Key}");
+                    if (LOG_ERRORS)
+                        Debug.LogError($"[ClientPredictionManager][ComputePredictionDecision] NULL_PREDICTED_GAME_OBJECT. id:{pair.Key}");
                     continue;
                 }
                 
@@ -412,7 +415,8 @@ namespace Prediction
             if (tickId <= startTick)
             {
                 //NOTE: this shouldn't be possible
-                Debug.Log($"[PredictionManager][Resimulate] tickId:{tickId} startTick:{startTick}. Are you misusing the system? startTick cannot be larger or equal than the current tickId");
+                if (DEBUG || LOG_EVENTS)
+                    Debug.Log($"[PredictionManager][Resimulate] tickId:{tickId} startTick:{startTick}. Are you misusing the system? startTick cannot be larger or equal than the current tickId");
                 resimSkipNotEnoughHistory++;
                 return;
             }
@@ -445,7 +449,8 @@ namespace Prediction
             {
                 if (!pair.Value.gameObject)
                 {
-                    Debug.LogError($"[ClientPredictionManager][Resimulate] NULL_PREDICTED_GAME_OBJECT. id:{pair.Key}");
+                    if (LOG_ERRORS)
+                        Debug.LogError($"[ClientPredictionManager][Resimulate] NULL_PREDICTED_GAME_OBJECT. id:{pair.Key}");
                     continue;
                 }
                 
@@ -468,7 +473,8 @@ namespace Prediction
                 {
                     if (!pair.Value.gameObject)
                     {
-                        Debug.LogError($"[ClientPredictionManager][Resimulate] NULL_PREDICTED_GAME_OBJECT. id:{pair.Key}");
+                        if (LOG_ERRORS)
+                            Debug.LogError($"[ClientPredictionManager][Resimulate] NULL_PREDICTED_GAME_OBJECT. id:{pair.Key}");
                         continue;
                     }
                     
@@ -480,7 +486,8 @@ namespace Prediction
                 {
                     if (!pair.Value.gameObject)
                     {
-                        Debug.LogError($"[ClientPredictionManager][Resimulate] NULL_PREDICTED_GAME_OBJECT. id:{pair.Key}");
+                        if (LOG_ERRORS)
+                            Debug.LogError($"[ClientPredictionManager][Resimulate] NULL_PREDICTED_GAME_OBJECT. id:{pair.Key}");
                         continue;
                     }
                     
@@ -524,7 +531,8 @@ namespace Prediction
             {
                 if (!pair.Value.gameObject)
                 {
-                    Debug.LogError($"[ClientPredictionManager][Snap] NULL_PREDICTED_GAME_OBJECT. id:{pair.Key}");
+                    if (LOG_ERRORS)
+                        Debug.LogError($"[ClientPredictionManager][Snap] NULL_PREDICTED_GAME_OBJECT. id:{pair.Key}");
                     continue;
                 }
                 
@@ -541,14 +549,16 @@ namespace Prediction
             {
                 if (!pair.Value.gameObject)
                 {
-                    Debug.LogError($"[ClientPredictionManager][SnapAllToServerAndReset] NULL_PREDICTED_GAME_OBJECT. id:{pair.Key}");
+                    if (LOG_ERRORS)
+                        Debug.LogError($"[ClientPredictionManager][SnapAllToServerAndReset] NULL_PREDICTED_GAME_OBJECT. id:{pair.Key}");
                     continue;
                 }
                 
                 pair.Value.SnapToLatestServerAndReset();
             }
             
-            Debug.Log($"[PredictionManager][SnapAllToServerAndReset] tickId:{tickId}");
+            if (DEBUG || LOG_EVENTS)
+                Debug.Log($"[PredictionManager][SnapAllToServerAndReset] tickId:{tickId}");
             onSnapToServer.Dispatch(tickId);
         }
         
@@ -566,7 +576,8 @@ namespace Prediction
             {
                 if (!pair.Value.gameObject)
                 {
-                    Debug.LogError($"[ClientPredictionManager][ClientPreSimTick] NULL_PREDICTED_GAME_OBJECT. id:{pair.Key}");
+                    if (LOG_ERRORS)
+                        Debug.LogError($"[ClientPredictionManager][ClientPreSimTick] NULL_PREDICTED_GAME_OBJECT. id:{pair.Key}");
                     continue;
                 }
                 
@@ -637,7 +648,8 @@ namespace Prediction
             {
                 if (!pair.Value.gameObject)
                 {
-                    Debug.LogError($"[ClientPredictionManager][ClientPostSimTick] NULL_PREDICTED_GAME_OBJECT. id:{pair.Key}");
+                    if (LOG_ERRORS)
+                        Debug.LogError($"[ClientPredictionManager][ClientPostSimTick] NULL_PREDICTED_GAME_OBJECT. id:{pair.Key}");
                     continue;
                 }
                 

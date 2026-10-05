@@ -150,7 +150,8 @@ namespace Prediction
             if (entity == null || ownerId == invalidConnectionId)
                 return;
             
-            Debug.Log($"[PredictionManager][Ownership][SetEntityOwner] SERVER ({entity.id}) ownerId:{ownerId} entity:{entity}");
+            if (DEBUG || DEBUG_OWNERSHIP || LOG_EVENTS)
+                Debug.Log($"[PredictionManager][Ownership][SetEntityOwner] SERVER ({entity.id}) ownerId:{ownerId} entity:{entity}");
             if (GetOwner(entity) == ownerId)
             {
                 //NOOP
@@ -195,7 +196,8 @@ namespace Prediction
                 {
                     //TODO: event
                 }
-                Debug.Log($"[PredictionManager][Ownership][UnsetOwnership] SERVER ownerId:{ownerId} entity:{entity}");
+                if (DEBUG || DEBUG_OWNERSHIP || LOG_EVENTS)
+                    Debug.Log($"[PredictionManager][Ownership][UnsetOwnership] SERVER ownerId:{ownerId} entity:{entity}");
             }
         }
     
@@ -223,7 +225,8 @@ namespace Prediction
                 return;
             
             uint id = entity.id;
-            Debug.Log($"[PredictionManager][AddPredictedEntity] SERVER ({id})=>({entity})");
+            if (DEBUG || LOG_EVENTS)
+                Debug.Log($"[PredictionManager][AddPredictedEntity] SERVER ({id})=>({entity})");
             
             _serverEntityToId[entity] = id;
             _idToServerEntity[id] = entity;
@@ -260,7 +263,8 @@ namespace Prediction
             {
                 _worldStateRecord.Resize(_serverEntityToId.Count);
             }
-            Debug.Log($"[PredictionManager][RemovePredictedEntity] entity:{entity}");
+            if (DEBUG || LOG_EVENTS)
+                Debug.Log($"[PredictionManager][RemovePredictedEntity] entity:{entity}");
         }
         
         public bool IsServerOwned(ServerPredictedEntity svEnt)
@@ -314,7 +318,8 @@ namespace Prediction
                 int ownerId = GetOwner(entity);
                 if (ownerId != connId)
                 {
-                    Debug.LogWarning($"[PredictionManager][OnClientStateReceiver][POTENTIAL_EXPLOIT_ATTEMPT] CLIENT_UPDATE_FOR_NON_OWNERD_ENTITY connId:{connId} != ownerId:{ownerId} cTickId:{clientTickId} entityId:{entityId}");
+                    if (LOG_ERRORS)
+                        Debug.LogWarning($"[PredictionManager][OnClientStateReceiver][POTENTIAL_EXPLOIT_ATTEMPT] CLIENT_UPDATE_FOR_NON_OWNERD_ENTITY connId:{connId} != ownerId:{ownerId} cTickId:{clientTickId} entityId:{entityId}");
                     return;
                 }
                 

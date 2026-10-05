@@ -59,12 +59,14 @@ namespace Prediction.Components.Controllers
 
         ~ServerPredictedEntity()
         {
-            Debug.Log($"[ServerPredictedEntity] Destructor");
+            if (PredictionManager.LOG_EVENTS)
+                Debug.Log($"[ServerPredictedEntity] Destructor");
         }
         
         public ServerPredictedEntity(uint id, int bufferSize, Rigidbody rb, GameObject visuals, PredictableControllableComponent[] controllablePredictionContributors, PredictableComponent[] predictionContributors) : base(id, rb, visuals, controllablePredictionContributors, predictionContributors)
         {
-            Debug.Log($"[ServerPredictedEntity] Constructor");
+            if (PredictionManager.LOG_EVENTS)
+                Debug.Log($"[ServerPredictedEntity] Constructor");
             gameObject = rb.gameObject;
             inputQueue = new TickIndexedBuffer<PredictionInputRecord>(bufferSize);
             inputQueue.emptyValue = null;

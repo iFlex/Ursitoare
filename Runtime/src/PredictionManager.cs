@@ -15,7 +15,11 @@ namespace Prediction
         public static PredictionManager Instance;
         
         public static bool DEBUG = false;
-        public static bool DEBUG_OWNERSHIP = true;
+        public static bool DEBUG_OWNERSHIP = false;
+        //Occasional but important events: entities added/removed/created/destroyed, ownership changes, snap-to-server resets, misuse warnings.
+        public static bool LOG_EVENTS = false;
+        //Errors and warnings (e.g. NULL_PREDICTED_GAME_OBJECT, POTENTIAL_EXPLOIT_ATTEMPT). Off by default like all other logging; turn on while integrating or debugging.
+        public static bool LOG_ERRORS = false;
         public static bool LOG_TIMING = false;
         public static bool DO_RESIM = true;
         public static bool DO_SNAP = true;
@@ -165,6 +169,7 @@ namespace Prediction
             _tickTimer.Start();
             
             ticksSinceResim++;
+            //TODO: fix these counters now that the client and server have been separated! they are not accurate
             resimulatedThisTick = false;
             shouldResimThisTick = false;
             lastResimDuration = 0;
