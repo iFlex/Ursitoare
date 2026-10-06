@@ -31,6 +31,8 @@ namespace Prediction.Interpolation
         private double tickInterval = Time.fixedDeltaTime;
         
         private double time = 0;
+        // The moment on the same timeline as `time` that the visuals were last drawn at, for GetVisualDelay.
+        private double drawnTime = double.NaN;
         private uint smoothingTick = 0;
 
         public static int startAfterBfrTicks = 2;
@@ -108,10 +110,13 @@ namespace Prediction.Interpolation
                     target.rotation = Quaternion.Slerp(target.rotation, to.rotation, t);
                     if (DEBUG)
                         _posAnalyser.LogAndPrintPosRot("SELF_LERP", target.position, target.rotation);
+                    // Chases `to` from wherever the visuals are, so they show no single moment.
+                    drawnTime = double.NaN;
                 }
                 else
                 {
                     ApplyState(from, to, interpTarget);
+                    drawnTime = USE_INTERPOLATION ? GetTime(from) + (GetTime(to) - GetTime(from)) * interpTarget : GetTime(to);
                 }
                 
                 if (interpTarget == 1f)
@@ -133,6 +138,19 @@ namespace Prediction.Interpolation
             }
         }
         
+        public double GetVisualDelay()
+        {
+            RingBuffer<PhysicsStateRecord> drawnFrom = GetInterpolationBuffer();
+            if (double.IsNaN(drawnTime) || drawnFrom.GetFill() == 0)
+                return double.NaN;
+            // Each Add puts one entry in both buffers, so the newest entry belongs to the newest state added.
+            double delay = GetTime(drawnFrom.GetEnd()) - drawnTime;
+            // An average of the last few states trails the newest of them by half its window.
+            if (USE_SMOOTH_BUFFER)
+                delay += (Math.Min(slidingWindowTickSize, buffer.GetFill()) - 1) * 0.5 * tickInterval;
+            return delay;
+        }
+
         private Vector3 prevPos = Vector3.zero;
         private Vector3 pos = Vector3.zero;
         //NOTE: the problem here is that our averaged state is jumping around somehow...

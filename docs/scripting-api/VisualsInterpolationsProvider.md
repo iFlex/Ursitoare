@@ -60,6 +60,18 @@ Inform the interpolator whether the entity is locally controlled. Implementation
 
 ---
 
+### GetVisualDelay
+
+```csharp
+double GetVisualDelay()
+```
+
+How far behind the newest state passed to `Add` the visuals were drawn in the last `Update`, in seconds. Smoothing that trails the newest state counts as delay. Returns `NaN` until something has been drawn, or when the drawing mode has no single moment it shows.
+
+`Add` is called once per simulated tick, so this is the delay behind the newest simulated tick. Add the time elapsed since that tick to get the delay against the present.
+
+---
+
 ## See Also
 
 - [MovingAverageInterpolator](MovingAverageInterpolator.md)

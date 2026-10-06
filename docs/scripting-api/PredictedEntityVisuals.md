@@ -91,6 +91,16 @@ Returns the distance between the visual object's current position and the physic
 
 ---
 
+### GetVisualDelay
+
+```csharp
+public double GetVisualDelay()
+```
+
+Seconds the visual object trails the newest simulated state, from the interpolation provider's `GetVisualDelay`. Returns `NaN` on the server, which shows the server transform as is, and before the interpolator first draws.
+
+---
+
 ### Destroy
 
 ```csharp

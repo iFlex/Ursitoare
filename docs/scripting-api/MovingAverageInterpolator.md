@@ -90,6 +90,16 @@ Computes the smoothed state for the latest raw entry by averaging position over 
 
 ---
 
+### GetVisualDelay
+
+```csharp
+public double GetVisualDelay()
+```
+
+Seconds between the newest state added and the moment drawn in the last `Update`. With `USE_SMOOTH_BUFFER` this includes half the averaging window, `(slidingWindowTickSize - 1) / 2` ticks, by which an average trails its newest state. Returns `NaN` before the first draw and with `INTERPOLATE_MANUAL`, which chases the target rather than drawing a fixed moment.
+
+---
+
 ### SetInterpolationTarget
 
 ```csharp

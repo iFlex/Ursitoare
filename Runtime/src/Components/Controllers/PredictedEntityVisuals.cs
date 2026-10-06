@@ -183,6 +183,12 @@ namespace Prediction.Components.Controllers
             return interpolationDistance;
         }
 
+        //NOTE: seconds behind the newest simulated state; NaN on the server, which shows the server transform as is.
+        public double GetVisualDelay()
+        {
+            return interpolationProvider?.GetVisualDelay() ?? double.NaN;
+        }
+
         public struct TransformJump
         {
             public Vector3 positionDiff;

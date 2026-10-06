@@ -48,6 +48,8 @@ Each time `ClientPredictedEntity.newStateReached` fires (once per tick), the int
 
 The visual object always runs slightly behind the simulation to ensure there are always at least two states to interpolate between.
 
+`GetVisualDelay()` tells you how far behind: the seconds between the newest simulated state and the moment drawn in the last `Update`. That is the interpolation lag plus half the smoothing window, because an average of the last few states trails the newest of them. Add the time since that tick to get the delay against the present.
+
 ### Configuration
 
 | Property | Default | Description |
@@ -81,6 +83,7 @@ public class MyInterpolator : VisualsInterpolationsProvider
     public void SetInterpolationTarget(Transform t) { /* store the transform to drive */ }
     public void Reset() { /* clear state, e.g. on ownership change */ }
     public void SetControlledLocally(bool isLocalAuthority) { /* adjust for local vs follower */ }
+    public double GetVisualDelay() { /* seconds the last drawn moment trails the newest added state, or NaN */ }
 }
 
 PredictionManager.INTERPOLATION_PROVIDER = () => new MyInterpolator();
