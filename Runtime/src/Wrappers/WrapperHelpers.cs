@@ -8,7 +8,7 @@ namespace Prediction.Components
 {
     public class WrapperHelpers
     {
-        public static PredictableControllableComponent[] GetControllableComponents(MonoBehaviour[] objects)
+        public static PredictableControllableComponent[] GetControllableComponents(MonoBehaviour[] objects, MonoBehaviour self = null)
         {
             List<PredictableControllableComponent> compos = new List<PredictableControllableComponent>();
             for (int i = 0; i < objects.Length; i++)
@@ -18,10 +18,14 @@ namespace Prediction.Components
                     compos.Add((PredictableControllableComponent)objects[i]);
                 }   
             }
+            if (self is PredictableControllableComponent)
+            {
+                compos.Add((PredictableControllableComponent)self);
+            }
             return compos.ToArray();
         }
         
-        public static PredictableComponent[] GetComponents(MonoBehaviour[] controllable)
+        public static PredictableComponent[] GetComponents(MonoBehaviour[] controllable, MonoBehaviour self = null)
         {
             List<PredictableComponent> compos = new List<PredictableComponent>();
             for (int i = 0; i < controllable.Length; i++)
@@ -31,25 +35,9 @@ namespace Prediction.Components
                     compos.Add((PredictableComponent)controllable[i]);
                 }   
             }
-            return compos.ToArray();
-        }
-        
-        public static PredictableComponent[] GetComponents(MonoBehaviour[] controllable, MonoBehaviour[] predictable)
-        {
-            List<PredictableComponent> compos = new List<PredictableComponent>();
-            for (int i = 0; i < controllable.Length; i++)
+            if (self is PredictableComponent)
             {
-                if (controllable[i] is PredictableComponent)
-                {
-                    compos.Add((PredictableComponent)controllable[i]);
-                }   
-            }
-            for (int i = 0; i < predictable.Length; i++)
-            {
-                if (controllable[i] is PredictableComponent && !compos.Contains((PredictableComponent)predictable[i]))
-                {
-                    compos.Add((PredictableComponent)controllable[i]);
-                }   
+                compos.Add((PredictableComponent)self);
             }
             return compos.ToArray();
         }
