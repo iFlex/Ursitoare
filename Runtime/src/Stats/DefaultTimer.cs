@@ -1,8 +1,6 @@
-﻿using System;
-using System.Diagnostics;
-using UnityEngine;
+﻿using UnityEngine;
 
-namespace Prediction.Stats
+namespace Sector0.Ursitoare.Stats
 {
     public class DefaultTimer : Timer
     {

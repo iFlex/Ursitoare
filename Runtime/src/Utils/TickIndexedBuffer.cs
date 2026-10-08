@@ -3,7 +3,7 @@
 
 using System.Collections.Generic;
 
-namespace Prediction.Utils
+namespace Sector0.Ursitoare.Utils
 {
     //TODO: implement an efficient version of this
     public class TickIndexedBuffer<T>

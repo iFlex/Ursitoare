@@ -3,7 +3,7 @@
 
 using UnityEngine;
 
-namespace Adapters.Prediction
+namespace Sector0.Ursitoare.Interpolation
 {
     public class PosAnalyser
     {

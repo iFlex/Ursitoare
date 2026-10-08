@@ -3,14 +3,13 @@
 
 #if (UNITY_EDITOR)
 using NUnit.Framework;
-using Prediction.Components;
-using Prediction.Components.Controllers;
-using Prediction.Data;
-using Prediction.Tests.mocks;
-using Prediction.Tests.Mocks;
+using Sector0.Ursitoare.Components;
+using Sector0.Ursitoare.Data;
+using Sector0.Ursitoare.Tests.mocks;
+using Sector0.Ursitoare.Tests.Mocks;
 using UnityEngine;
 
-namespace Prediction.Tests
+namespace Sector0.Ursitoare.Tests
 {
     // Followers are client entities that are not controlled locally (other players, free bodies).
     // These tests pin down that a follower which diverges from the server always has a way back to the server state.

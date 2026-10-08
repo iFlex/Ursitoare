@@ -3,12 +3,12 @@
 
 using System;
 using Sector0.Events;
-using Prediction.Data;
-using Prediction.Resimulation.Detection;
-using Prediction.Utils;
+using Sector0.Ursitoare.Data;
+using Sector0.Ursitoare.Resimulation.Detection;
+using Sector0.Ursitoare.Utils;
 using UnityEngine;
 
-namespace Prediction.Components.Controllers
+namespace Sector0.Ursitoare.Components
 {
     //TODO: document in readme
     public class ClientPredictedEntity : AbstractPredictedEntity

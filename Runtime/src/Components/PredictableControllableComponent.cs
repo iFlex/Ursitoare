@@ -1,9 +1,9 @@
 ﻿// Copyright (c) 2026 Milorad Liviu Felix
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
-using Prediction.Data;
+using Sector0.Ursitoare.Data;
 
-namespace Prediction.Components
+namespace Sector0.Ursitoare.Components
 {
     //All components that take user input must implement this interface to support prediction. Even if no forces are applied.
     public interface PredictableControllableComponent

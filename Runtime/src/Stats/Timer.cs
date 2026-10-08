@@ -1,4 +1,4 @@
-﻿namespace Prediction.Stats
+﻿namespace Sector0.Ursitoare.Stats
 {
     public interface Timer
     {

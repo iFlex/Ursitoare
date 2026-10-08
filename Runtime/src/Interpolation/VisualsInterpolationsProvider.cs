@@ -1,10 +1,10 @@
 ﻿// Copyright (c) 2026 Milorad Liviu Felix
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
-using Prediction.Data;
+using Sector0.Ursitoare.Data;
 using UnityEngine;
 
-namespace Prediction.Interpolation
+namespace Sector0.Ursitoare.Interpolation
 {
     public interface VisualsInterpolationsProvider
     {

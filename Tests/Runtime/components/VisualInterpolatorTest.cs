@@ -2,14 +2,13 @@
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
 #if (UNITY_EDITOR)
-using Adapters.Prediction;
 using NUnit.Framework;
-using Prediction.Data;
-using Prediction.Interpolation;
-using Prediction.Utils;
+using Sector0.Ursitoare.Data;
+using Sector0.Ursitoare.Interpolation;
+using Sector0.Ursitoare.Utils;
 using UnityEngine;
 
-namespace Prediction.Tests
+namespace Sector0.Ursitoare.Tests
 {
     public class VisualInterpolatorTest
     {

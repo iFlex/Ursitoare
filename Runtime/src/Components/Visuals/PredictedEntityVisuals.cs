@@ -1,12 +1,12 @@
 ﻿// Copyright (c) 2026 Milorad Liviu Felix
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
-using Prediction.Data;
-using Prediction.Interpolation;
 using Sector0.Events;
+using Sector0.Ursitoare.Data;
+using Sector0.Ursitoare.Interpolation;
 using UnityEngine;
 
-namespace Prediction.Components.Controllers
+namespace Sector0.Ursitoare.Components
 {
     public class PredictedEntityVisuals : MonoBehaviour
     {

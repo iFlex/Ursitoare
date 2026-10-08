@@ -1,6 +1,6 @@
 {
     "name": "sector0.ursitoare",
-    "rootNamespace": "Prediction",
+    "rootNamespace": "sector0.Ursitoare",
     "references": [
         "GUID:3d3036d29bf95a74c8ab257abc8e6c09"
     ],

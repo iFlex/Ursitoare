@@ -3,7 +3,7 @@
 
 using UnityEngine;
 
-namespace Prediction.Data
+namespace Sector0.Ursitoare.Data
 {
     public class PhysicsStateRecord
     {

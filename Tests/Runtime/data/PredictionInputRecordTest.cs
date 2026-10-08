@@ -3,9 +3,9 @@
 
 #if (UNITY_EDITOR) 
 using NUnit.Framework;
-using Prediction.Data;
+using Sector0.Ursitoare.Data;
 
-namespace Prediction.Tests.data
+namespace Sector0.Ursitoare.Tests.data
 {
     public class PredictionInputRecordTest
     {

@@ -5,13 +5,13 @@
 using System;
 using System.Collections.Generic;
 using NUnit.Framework;
-using Prediction.Components.Controllers;
-using Prediction.Data;
-using Prediction.Resimulation.Detection;
-using Prediction.Tests.mocks;
+using Sector0.Ursitoare.Components;
+using Sector0.Ursitoare.Data;
+using Sector0.Ursitoare.Resimulation.Detection;
+using Sector0.Ursitoare.Tests.mocks;
 using UnityEngine;
 
-namespace Prediction.Tests
+namespace Sector0.Ursitoare.Tests
 {
     public class PredictionManagerServerTest
     {

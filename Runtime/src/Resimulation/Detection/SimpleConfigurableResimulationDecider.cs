@@ -2,11 +2,11 @@
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
 using System.Runtime.CompilerServices;
-using Prediction.Components.Controllers;
-using Prediction.Data;
+using Sector0.Ursitoare.Components;
+using Sector0.Ursitoare.Data;
 using UnityEngine;
 
-namespace Prediction.Resimulation.Detection
+namespace Sector0.Ursitoare.Resimulation.Detection
 {
     public class SimpleConfigurableResimulationDecider : SingleSnapshotInstanceResimChecker
     {

@@ -3,11 +3,11 @@
 
 #if (UNITY_EDITOR)
 using NUnit.Framework;
-using Prediction.Data;
-using Prediction.Simulation;
+using Sector0.Ursitoare.Data;
+using Sector0.Ursitoare.Simulation;
 using UnityEngine;
 
-namespace Prediction.Tests.simulation
+namespace Sector0.Ursitoare.Tests.simulation
 {
     public class RewindablePhysicsControllerTest
     {

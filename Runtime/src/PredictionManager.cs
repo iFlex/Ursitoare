@@ -1,14 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
-using Prediction.Components.Controllers;
 using Sector0.Events;
-using Prediction.Interpolation;
-using Prediction.Resimulation.Detection;
-using Prediction.Simulation;
-using Prediction.Stats;
+using Sector0.Ursitoare.Components;
+using Sector0.Ursitoare.Interpolation;
+using Sector0.Ursitoare.Resimulation.Detection;
+using Sector0.Ursitoare.Simulation;
+using Sector0.Ursitoare.Stats;
 using UnityEngine;
 
-namespace Prediction
+namespace Sector0.Ursitoare
 {
     public abstract class PredictionManager
     {

@@ -2,11 +2,11 @@
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
 using Sector0.Events;
-using Prediction.Data;
-using Prediction.Utils;
+using Sector0.Ursitoare.Data;
+using Sector0.Ursitoare.Utils;
 using UnityEngine;
 
-namespace Prediction.Components.Controllers
+namespace Sector0.Ursitoare.Components
 {
     public class ServerPredictedEntity : AbstractPredictedEntity
     {

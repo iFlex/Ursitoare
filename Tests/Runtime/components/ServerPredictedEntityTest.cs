@@ -4,12 +4,12 @@
 #if (UNITY_EDITOR) 
 using System.Linq;
 using NUnit.Framework;
-using Prediction.Components.Controllers;
-using Prediction.Data;
-using Prediction.Tests.mocks;
+using Sector0.Ursitoare.Components;
+using Sector0.Ursitoare.Data;
+using Sector0.Ursitoare.Tests.mocks;
 using UnityEngine;
 
-namespace Prediction.Tests
+namespace Sector0.Ursitoare.Tests
 {
     //TODO: fix
     public class ServerPredictedEntityTest

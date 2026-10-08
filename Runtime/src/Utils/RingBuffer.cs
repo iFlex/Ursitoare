@@ -3,7 +3,7 @@
 
 using System;
 
-namespace Prediction.Utils
+namespace Sector0.Ursitoare.Utils
 {
     public class RingBuffer<T>
     {

@@ -1,10 +1,10 @@
 ﻿// Copyright (c) 2026 Milorad Liviu Felix
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
-using Prediction.Components.Controllers;
+using Sector0.Ursitoare.Components;
 using UnityEngine;
 
-namespace Prediction.Simulation
+namespace Sector0.Ursitoare.Simulation
 {
     public class ScenePhysicsController : PhysicsController
     {

@@ -2,9 +2,10 @@
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
 using System.Collections.Generic;
+using Sector0.Ursitoare.Components;
 using UnityEngine;
 
-namespace Prediction.Components
+namespace Sector0.Ursitoare.Wrappers
 {
     public class WrapperHelpers
     {

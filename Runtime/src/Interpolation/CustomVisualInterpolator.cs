@@ -3,12 +3,11 @@
 
 using System;
 using System.Runtime.CompilerServices;
-using Prediction.Data;
-using Prediction.Interpolation;
-using Prediction.Utils;
+using Sector0.Ursitoare.Data;
+using Sector0.Ursitoare.Utils;
 using UnityEngine;
 
-namespace Adapters.Prediction
+namespace Sector0.Ursitoare.Interpolation
 {
     //TODO: somehow there's no late additions to the buffer, yet the interpolation runs past the end of the buffer.
     public class CustomVisualInterpolator : VisualsInterpolationsProvider

@@ -3,9 +3,9 @@
 
 #if (UNITY_EDITOR) 
 using NUnit.Framework;
-using Prediction.Utils;
+using Sector0.Ursitoare.Utils;
 
-namespace Prediction.Tests
+namespace Sector0.Ursitoare.Tests
 {
     public class RingBufferTest
     {

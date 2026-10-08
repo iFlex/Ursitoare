@@ -2,11 +2,10 @@
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
 #if UNITY_EDITOR
-using Prediction.Components;
-using Prediction.Components.Controllers;
+using Sector0.Ursitoare.Components;
 using UnityEngine;
 
-namespace Prediction.Tests.Mocks
+namespace Sector0.Ursitoare.Tests.Mocks
 {
     public class MockClientPredictedEntity : ClientPredictedEntity
     {

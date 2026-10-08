@@ -3,11 +3,11 @@
 
 #if (UNITY_EDITOR)
 using System.Collections.Generic;
-using Prediction.Components;
-using Prediction.Data;
+using Sector0.Ursitoare.Components;
+using Sector0.Ursitoare.Data;
 using UnityEngine;
 
-namespace Prediction.Tests.mocks
+namespace Sector0.Ursitoare.Tests.mocks
 {
     public class MockPredictableControllableComponent : PredictableControllableComponent, PredictableComponent
     {

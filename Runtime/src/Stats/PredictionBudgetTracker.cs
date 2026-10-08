@@ -3,11 +3,11 @@
 
 using System;
 using System.Diagnostics;
-using Prediction.Utils;
 using Sector0.Events;
+using Sector0.Ursitoare.Utils;
 using UnityEngine;
 
-namespace Prediction.Stats
+namespace Sector0.Ursitoare.Stats
 {
     //NOTE: immutable snapshot of one measured category (e.g. all ticks, or only resimulating ticks).
     //      Durations are in milliseconds, fractions are relative to the frame budget where 1.0 means the

@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using Prediction.Components.Controllers;
-using Prediction.Data;
+using Sector0.Ursitoare.Components;
+using Sector0.Ursitoare.Data;
 using UnityEngine;
 
-namespace Prediction
+namespace Sector0.Ursitoare
 {
     public class ServerPredictionManager : PredictionManager
     {

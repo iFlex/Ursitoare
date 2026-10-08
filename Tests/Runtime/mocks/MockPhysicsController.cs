@@ -2,11 +2,11 @@
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
 #if (UNITY_EDITOR)
-using Prediction.Components.Controllers;
-using Prediction.Simulation;
+using Sector0.Ursitoare.Components;
+using Sector0.Ursitoare.Simulation;
 using UnityEngine;
 
-namespace Prediction.Tests.mocks
+namespace Sector0.Ursitoare.Tests.mocks
 {
     public class MockPhysicsController : PhysicsController
     {

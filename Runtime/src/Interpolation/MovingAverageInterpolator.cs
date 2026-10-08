@@ -3,12 +3,11 @@
 
 using System;
 using System.Runtime.CompilerServices;
-using Adapters.Prediction;
-using Prediction.Data;
-using Prediction.Utils;
+using Sector0.Ursitoare.Data;
+using Sector0.Ursitoare.Utils;
 using UnityEngine;
 
-namespace Prediction.Interpolation
+namespace Sector0.Ursitoare.Interpolation
 {
     //TODO: do we need a common interpolator class with the buffering logic? can this live in the visuals class?
     public class MovingAverageInterpolator: VisualsInterpolationsProvider
