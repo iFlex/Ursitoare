@@ -14,6 +14,8 @@ namespace Sector0.Ursitoare
     {
         public static PredictionManager Instance;
         
+        //TODO: futher separate data in this class into Server and Client impls
+        
         public static bool DEBUG = false;
         public static bool DEBUG_OWNERSHIP = false;
         //Occasional but important events: entities added/removed/created/destroyed, ownership changes, snap-to-server resets, misuse warnings.

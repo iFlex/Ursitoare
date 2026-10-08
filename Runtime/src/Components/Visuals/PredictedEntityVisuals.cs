@@ -10,8 +10,6 @@ namespace Sector0.Ursitoare.Components
 {
     public class PredictedEntityVisuals : MonoBehaviour
     {
-        //TODO: larger smooth window for followers!
-        
         public static bool SHOW_DBG = false;
         public static bool DETACH_VISUALS = true;
         //TODO: differentiate jumps in the direction of travel versus sideways
@@ -50,7 +48,7 @@ namespace Sector0.Ursitoare.Components
             interpolationProvider = provider;
             this.clientPredictedEntity = clientPredictedEntity;
             clientPredictedEntity.onReset.AddEventListener(OnShouldReset);
-            //TODO: what? why artifficial delay?
+            //TODO: what? why artifficial delay? - review this
             currentTimeStep -= artifficialDelay;
 
             if (DETACH_VISUALS)
