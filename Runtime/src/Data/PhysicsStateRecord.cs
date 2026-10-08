@@ -13,6 +13,8 @@ namespace Sector0.Ursitoare.Data
         public Vector3 velocity;
         public Vector3 angularVelocity;
         public PredictionInputRecord input;
+        
+        //TODO: what about ints? other data types? maybe coult try out generics for this
         //Components have relevant state to be received from the server
         public PredictionInputRecord componentState;
         
