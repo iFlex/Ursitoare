@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using NUnit.Framework.Constraints;
 using Sector0.Events;
 using Sector0.Ursitoare.Components;
 using Sector0.Ursitoare.Data;
@@ -160,7 +159,7 @@ namespace Sector0.Ursitoare
         }
         
         public int GetOwner(ServerPredictedEntity entity)
-    {
+        {
             return _entityToOwnerConnId.GetValueOrDefault(entity, invalidConnectionId);
         }
 
@@ -215,33 +214,22 @@ namespace Sector0.Ursitoare
             if (GetOwner(entity) == ownerId)
             {
                 UnsetOwnership(entity);
+                SetOwnership(entity, serverConnectionId);
             }
         }
         
         //TODO: unit test
-        public void UnsetOwnership(ServerPredictedEntity entity)
+        void UnsetOwnership(ServerPredictedEntity entity)
         {
             if (entity != null)
             {
                 int ownerId = GetOwner(entity);
-                if (ownerId == serverConnectionId)
-                {
-                    //NOOP
-                    return;
-                }
-                
-                _entityToOwnerConnId[entity] = serverConnectionId;
+                _entityToOwnerConnId.Remove(entity);
                 entity.Reset(); //Prepare for new stream of tickIds
-                
                 if (_connIdToEntity.TryGetValue(ownerId, out HashSet<ServerPredictedEntity> entities))
                 {
                     entities.Remove(entity);
                 }
-                if (!_connIdToEntity.ContainsKey(serverConnectionId))
-                {
-                    _connIdToEntity[serverConnectionId] = new HashSet<ServerPredictedEntity>();
-                }
-                _connIdToEntity[serverConnectionId].Add(entity);
                 
                 try
                 {
@@ -268,7 +256,10 @@ namespace Sector0.Ursitoare
             _serverEntityToId[entity] = id;
             _idToServerEntity[id] = entity;
             AddPredictedEntity(entity.gameObject);
-            SetOwnership(entity, serverConnectionId, false);
+            if (GetOwner(entity) == invalidConnectionId)
+            {
+                SetOwnership(entity, serverConnectionId, false);
+            }
             
             if (useServerWorldStateMessage)
             {

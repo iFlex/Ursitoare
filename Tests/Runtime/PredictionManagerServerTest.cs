@@ -321,8 +321,8 @@ namespace Sector0.Ursitoare.Tests
             Assert.AreEqual(2, manager.GetOwner(serverEntity2));
             Assert.AreEqual(serverEntity1, manager.GetEntity(1));
             
-            manager.UnsetOwnership(serverEntity1);
-            Assert.AreEqual(-1, manager.GetOwner(serverEntity1));
+            manager.UnsetOwnership(serverEntity1, 1);
+            Assert.AreEqual(0, manager.GetOwner(serverEntity1));
             Assert.AreEqual(2, manager.GetOwner(serverEntity2));
         }
         

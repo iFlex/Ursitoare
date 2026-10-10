@@ -183,35 +183,6 @@ namespace Sector0.Ursitoare.Tests
             clientGOs[i].transform.position = position;
             clientGOs[i].GetComponent<Rigidbody>().position = position;
         }
-
-        [Test]
-        public void UnsetOwnershipOnNotRegisteredEntity()
-        {
-            Assert.DoesNotThrow(() => managerServer.UnsetOwnership(null));
-            
-            var visuals = new GameObject("ServerVisual_");
-            var go = new GameObject("Server_predicted_");
-            Rigidbody srb = go.AddComponent<Rigidbody>();
-            var svEnt = new ServerPredictedEntity((uint)0, BUFFER_SIZE, srb, visuals, Array.Empty<PredictableControllableComponent>(), Array.Empty<PredictableComponent>());
-            
-            managerServer.UnsetOwnership(svEnt);
-            Assert.AreEqual(-1, managerServer.GetOwner(svEnt));
-            Assert.AreEqual(false, managerServer.IsServerOwned(svEnt));
-        }
-        
-        [Test]
-        public void UnsetOwnershipOnNotOwnerEntity()
-        {
-            var visuals = new GameObject("ServerVisual_");
-            var go = new GameObject("Server_predicted_");
-            Rigidbody srb = go.AddComponent<Rigidbody>();
-            var svEnt = new ServerPredictedEntity((uint)0, BUFFER_SIZE, srb, visuals, Array.Empty<PredictableControllableComponent>(), Array.Empty<PredictableComponent>());
-            managerServer.AddPredictedEntity(svEnt);
-            
-            managerServer.UnsetOwnership(svEnt);
-            Assert.AreEqual(-1, managerServer.GetOwner(svEnt));
-            Assert.AreEqual(false, managerServer.IsServerOwned(svEnt));
-        }
         
         [Test]
         public void SetOwnerReflectedOnBothServerAndClient()
@@ -368,7 +339,7 @@ namespace Sector0.Ursitoare.Tests
                     managerServer.UnsetOwnership(serverEntities[i], ownerId);
                     break;
                 case ReleaseMode.Revoke:
-                    managerServer.UnsetOwnership(serverEntities[i]);
+                    managerServer.UnsetOwnership(serverEntities[i], ownerId);
                     break;
                 case ReleaseMode.GiveToServer:
                     managerServer.SetEntityOwner(serverEntities[i], 0);
@@ -428,8 +399,8 @@ namespace Sector0.Ursitoare.Tests
             Assert.AreEqual(1, MessagesTo(0, 0, true), "Entity handed back to the server more than once");
 
             //Fully revoking the now server owned entity, also repeatedly
-            managerServer.UnsetOwnership(serverEntities[0]);
-            managerServer.UnsetOwnership(serverEntities[0]);
+            managerServer.UnsetOwnership(serverEntities[0], 1);
+            managerServer.UnsetOwnership(serverEntities[0], 1);
 
             AssertOwner(0, -1);
             AssertOwner(1, 1);

@@ -586,13 +586,23 @@ namespace Sector0.Ursitoare
                         Debug.LogError($"[ClientPredictionManager][ClientPreSimTick] NULL_PREDICTED_GAME_OBJECT. id:{pair.Key}");
                     continue;
                 }
-                
-                if (IsControlledLocally(pair.Key) && PREDICTION_ENABLED)
+
+                bool controlledLocally = IsControlledLocally(pair.Key);
+                if (controlledLocally)
                 {
                     if (DEBUG)
                         Debug.Log($"[PredictionManager][ClientPreSimTick] Client:{pair.Value} tick:{tickId}");
                     
-                    PredictionInputRecord tickInputRecord = pair.Value.ClientSimulationTick(tickId);
+                    PredictionInputRecord tickInputRecord;
+                    if (PREDICTION_ENABLED)
+                    {
+                        tickInputRecord = pair.Value.ClientSimulationTick(tickId);
+                    }
+                    else
+                    {
+                        tickInputRecord = pair.Value.SampleInput(tickId);
+                    }
+                    
                     try
                     {
                         if (DEBUG)
@@ -608,7 +618,8 @@ namespace Sector0.Ursitoare
                         onClientStateSendError.Dispatch(err);
                     }
                 }
-                else
+                
+                if (!controlledLocally || !PREDICTION_ENABLED)
                 {
                     //Only run this on the pure client
                     if (!PREDICTION_ENABLED)
