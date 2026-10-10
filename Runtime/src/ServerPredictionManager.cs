@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using NUnit.Framework.Constraints;
 using Sector0.Events;
 using Sector0.Ursitoare.Components;
 using Sector0.Ursitoare.Data;
@@ -9,6 +10,7 @@ namespace Sector0.Ursitoare
 {
     public class ServerPredictionManager : PredictionManager
     {
+        public static bool LOG_ENTITY_PROCESSING_EXCEPTIONS = false;
         public static ServerPredictionManager Instance;
         
         public Dictionary<ServerPredictedEntity, uint> _serverEntityToId = new Dictionary<ServerPredictedEntity, uint>();
@@ -83,15 +85,26 @@ namespace Sector0.Ursitoare
         {
             foreach (KeyValuePair<ServerPredictedEntity, uint> pair in _serverEntityToId)
             {
-                ServerPredictedEntity entity = pair.Key;
-                if (IsServerOwned(entity))
+                //TODO: pref review - will having try - catch here impact the hot path much?
+                try
                 {
-                    entity.ServerOwnedSimulationTick();
-                    MarkLatestAppliedTickId(tickId, entity);
+                    ServerPredictedEntity entity = pair.Key;
+                    if (IsServerOwned(entity))
+                    {
+                        entity.ServerOwnedSimulationTick();
+                        MarkLatestAppliedTickId(tickId, entity);
+                    }
+                    else
+                    {
+                        MarkLatestAppliedTickId(entity.ServerSimulationTick(), entity);
+                    }
                 }
-                else
+                catch (Exception e)
                 {
-                    MarkLatestAppliedTickId(entity.ServerSimulationTick(), entity);
+                    if (LOG_ENTITY_PROCESSING_EXCEPTIONS)
+                    {
+                        Debug.LogException(e);
+                    }
                 }
             }
         }
@@ -105,23 +118,34 @@ namespace Sector0.Ursitoare
             
             foreach (KeyValuePair<ServerPredictedEntity, uint> pair in _serverEntityToId)
             {
-                ServerPredictedEntity entity = pair.Key;
-                uint id = pair.Value;
-                PhysicsStateRecord state = entity.SamplePhysicsState(tickId);
-                state.input = entity.GetLastInput();
-                
-                if (DEBUG)
-                    Debug.Log($"[PredictionManager][ServerPostSimTick] id:{id} update:{state}");
-                
-                if (useServerWorldStateMessage)
+                try
                 {
-                    AccumulateWorldState(id, state);
+                    ServerPredictedEntity entity = pair.Key;
+                    uint id = pair.Value;
+                    PhysicsStateRecord state = entity.SamplePhysicsState(tickId);
+                    state.input = entity.GetLastInput();
+
+                    if (DEBUG)
+                        Debug.Log($"[PredictionManager][ServerPostSimTick] id:{id} update:{state}");
+
+                    if (useServerWorldStateMessage)
+                    {
+                        AccumulateWorldState(id, state);
+                    }
+                    else
+                    {
+                        SendServerState(id, state);
+                    }
                 }
-                else
+                catch (Exception e)
                 {
-                    SendServerState(id, state);
+                    if (LOG_ENTITY_PROCESSING_EXCEPTIONS)
+                    {
+                        Debug.LogException(e);
+                    }
                 }
             }
+            
             if (useServerWorldStateMessage)
             {
                 SendWorldState(_worldStateRecord);
@@ -163,46 +187,7 @@ namespace Sector0.Ursitoare
             SetOwnership(entity, ownerId);
         }
         
-        public void UnsetOwnership(ServerPredictedEntity entity, int ownerId)
-        {
-            if (ownerId == invalidConnectionId)
-                return;
-            
-            if (GetOwner(entity) == ownerId)
-            {
-                UnsetOwnership(entity);
-                //If you release an entity from ownership, automatically give it back to the server until a new user is set as owner.
-                SetOwnership(entity, serverConnectionId);
-            }
-        }
-        
-        //TODO: unit test
-        public void UnsetOwnership(ServerPredictedEntity entity)
-        {
-            if (entity != null)
-            {
-                int ownerId = GetOwner(entity);
-                _entityToOwnerConnId.Remove(entity);
-                entity.Reset(); //Prepare for new stream of tickIds
-                if (_connIdToEntity.TryGetValue(ownerId, out HashSet<ServerPredictedEntity> entities))
-                {
-                    entities.Remove(entity);
-                }
-                
-                try
-                {
-                    reliableServerSetControlledLocally.Invoke(ownerId, entity.id, false);
-                }
-                catch (Exception e)
-                {
-                    //TODO: event
-                }
-                if (DEBUG || DEBUG_OWNERSHIP || LOG_EVENTS)
-                    Debug.Log($"[PredictionManager][Ownership][UnsetOwnership] SERVER ownerId:{ownerId} entity:{entity}");
-            }
-        }
-    
-        void SetOwnership(ServerPredictedEntity entity, int ownerId)
+        void SetOwnership(ServerPredictedEntity entity, int ownerId, bool notify = true)
         {
             if (entity == null || ownerId == invalidConnectionId)
                 return;
@@ -216,7 +201,59 @@ namespace Sector0.Ursitoare
             
             //Prepare for new stream of tickIds
             entity.Reset();
-            reliableServerSetControlledLocally.Invoke(ownerId, entity.id, true);
+            if (notify)
+            {
+                reliableServerSetControlledLocally.Invoke(ownerId, entity.id, true);
+            }
+        }
+        
+        public void UnsetOwnership(ServerPredictedEntity entity, int ownerId)
+        {
+            if (ownerId == invalidConnectionId)
+                return;
+            
+            if (GetOwner(entity) == ownerId)
+            {
+                UnsetOwnership(entity);
+            }
+        }
+        
+        //TODO: unit test
+        public void UnsetOwnership(ServerPredictedEntity entity)
+        {
+            if (entity != null)
+            {
+                int ownerId = GetOwner(entity);
+                if (ownerId == serverConnectionId)
+                {
+                    //NOOP
+                    return;
+                }
+                
+                _entityToOwnerConnId[entity] = serverConnectionId;
+                entity.Reset(); //Prepare for new stream of tickIds
+                
+                if (_connIdToEntity.TryGetValue(ownerId, out HashSet<ServerPredictedEntity> entities))
+                {
+                    entities.Remove(entity);
+                }
+                if (!_connIdToEntity.ContainsKey(serverConnectionId))
+                {
+                    _connIdToEntity[serverConnectionId] = new HashSet<ServerPredictedEntity>();
+                }
+                _connIdToEntity[serverConnectionId].Add(entity);
+                
+                try
+                {
+                    reliableServerSetControlledLocally.Invoke(ownerId, entity.id, false);
+                }
+                catch (Exception e)
+                {
+                    //TODO: event
+                }
+                if (DEBUG || DEBUG_OWNERSHIP || LOG_EVENTS)
+                    Debug.Log($"[PredictionManager][Ownership][UnsetOwnership] SERVER ownerId:{ownerId} entity:{entity}");
+            }
         }
         
         public void AddPredictedEntity(ServerPredictedEntity entity)
@@ -231,6 +268,7 @@ namespace Sector0.Ursitoare
             _serverEntityToId[entity] = id;
             _idToServerEntity[id] = entity;
             AddPredictedEntity(entity.gameObject);
+            SetOwnership(entity, serverConnectionId, false);
             
             if (useServerWorldStateMessage)
             {
@@ -248,7 +286,13 @@ namespace Sector0.Ursitoare
                 PhysicsController.Untrack(entity.rigidbody);
             }
             
-            SetEntityOwner(entity, invalidConnectionId);
+            int ownerId = GetOwner(entity);
+            _entityToOwnerConnId.Remove(entity);
+            if (_connIdToEntity.ContainsKey(ownerId))
+            {
+                _connIdToEntity[ownerId].Remove(entity);
+            }
+            
             if (_serverEntityToId.ContainsKey(entity))
             {
                 uint id = _serverEntityToId[entity];
@@ -257,8 +301,8 @@ namespace Sector0.Ursitoare
             }
             
             _serverEntityToId.Remove(entity);
-            _entityToOwnerConnId.Remove(entity);
             RemovePredictedEntity(entity.gameObject);
+            
             if (useServerWorldStateMessage)
             {
                 _worldStateRecord.Resize(_serverEntityToId.Count);
@@ -314,7 +358,13 @@ namespace Sector0.Ursitoare
         {
             if (connId != 0)
                 clientStatesReceived++;
-
+            
+            if (tickInputRecord == null || !tickInputRecord.Valid())
+            {
+                invalidClientStatesReceived++;
+                return;
+            }
+            
             if (_idToServerEntity.TryGetValue(entityId, out ServerPredictedEntity entity))
             {
                 int ownerId = GetOwner(entity);

@@ -96,6 +96,7 @@ namespace Sector0.Ursitoare
         public bool shouldResimThisTick = false;
         public uint clientSendErrors = 0;
         public uint clientStatesReceived = 0;
+        public uint invalidClientStatesReceived = 0;
         
         protected uint ticksSinceResim = 0;
         public bool oversimProtectWithTickInterval = true;
@@ -210,6 +211,7 @@ namespace Sector0.Ursitoare
             lastInterTickDuration = 0;
             lastTickDuration = 0;
             clientLastReceivedTickId = 0;
+            invalidClientStatesReceived = 0;
         }
         
         public uint GetTotalTicks()

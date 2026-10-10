@@ -31,6 +31,11 @@ namespace Sector0.Ursitoare.Data
             binaryInput = new bool[other.binaryInput.Length];
         }
 
+        public bool Valid()
+        {
+            return scalarInput != null && binaryInput != null && scalarInput.Length >= scalarFillIndex && binaryInput.Length >= binaryFillIndex;
+        }
+        
         public void WriteReset()
         {
             scalarFillIndex = 0;
