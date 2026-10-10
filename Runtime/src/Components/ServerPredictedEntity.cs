@@ -13,6 +13,8 @@ namespace Sector0.Ursitoare.Components
         public static bool DEBUG = false;
         public static bool APPLY_FORCES_TO_EACH_CATCHUP_INPUT = false;
         public static bool USE_BUFFERING = true;
+        //NOTE: when false (and USE_BUFFERING is true) the buffer is refilled every time a server tick leaves the input queue empty.
+        //This restores the cushion after loss / latency increases at the cost of a few ticks run on the last input while it refills.
         public static bool BUFFER_ONCE = true;
         public static int BUFFER_FULL_THRESHOLD = 3; //Number of ticks to buffer before starting to send out the updates
         public static bool CATCHUP = true;
@@ -56,6 +58,7 @@ namespace Sector0.Ursitoare.Components
         public uint maxClientDelay = 0;
         public uint totalBufferingTicks = 0;
         public uint totalMissingInputTicks = 0;
+        public uint totalRebuffers = 0;
 
         ~ServerPredictedEntity()
         {
@@ -230,6 +233,18 @@ namespace Sector0.Ursitoare.Components
                         catchupTicks++;
                         HandleTickInput();
                     }
+                }
+
+                //NOTE: checked after this tick's input was consumed. An empty queue here means the next tick has nothing
+                //unless an input arrives just in time, so refill now instead of waiting for the server to starve.
+                if (!BUFFER_ONCE && USE_BUFFERING && inputQueue.GetFill() == 0)
+                {
+                    isBuffering = true;
+                    totalRebuffers++;
+
+                    devt.reason = DesyncReason.REBUFFER;
+                    devt.tickId = clientTickId;
+                    potentialDesync.Dispatch(devt);
                 }
             }
             else
@@ -440,6 +455,7 @@ namespace Sector0.Ursitoare.Components
             LATE_TICK = 5,
             TICK_OVERFLOW = 6,
 			CATCHUP = 7,
+            REBUFFER = 8,
         }
         public struct DesyncEvent
         {

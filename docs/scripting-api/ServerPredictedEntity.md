@@ -14,7 +14,7 @@ Server-side authoritative representation of a predicted entity. Buffers client i
 | `bool` | `DEBUG` | `false` | Verbose logging. |
 | `bool` | `APPLY_FORCES_TO_EACH_CATCHUP_INPUT` | `false` | Call `ApplyForces` for each catchup input, not just the last. |
 | `bool` | `USE_BUFFERING` | `true` | Buffer inputs on first connection before processing. |
-| `bool` | `BUFFER_ONCE` | `true` | Only apply buffering once per ownership assignment. |
+| `bool` | `BUFFER_ONCE` | `true` | Only buffer once per ownership assignment. When `false` (and `USE_BUFFERING` is `true`), buffering restarts every time a server tick leaves the input queue empty. |
 | `int` | `BUFFER_FULL_THRESHOLD` | `3` | Number of buffered inputs required before processing begins. |
 | `bool` | `CATCHUP` | `true` | Process multiple inputs per tick when the queue is large. |
 | `bool` | `INCREMENT_TICK_WHEN_NO_INPUT` | `false` | Advance client tick ID when no input is available. |
@@ -49,7 +49,8 @@ Server-side authoritative representation of a predicted entity. Buffers client i
 | `catchupTicks` | Total extra ticks processed during catchup. |
 | `catchupBufferWipes` | Times the catchup logic wiped the buffer. |
 | `maxClientDelay` | Maximum observed input queue range in ticks. |
-| `totalBufferingTicks` | Ticks spent in the initial buffering phase. |
+| `totalBufferingTicks` | Ticks spent buffering with inputs queued (initial phase, and refills when `BUFFER_ONCE` is `false`). |
+| `totalRebuffers` | Times buffering restarted because a tick left the queue empty (`BUFFER_ONCE = false` only). |
 | `totalMissingInputTicks` | Ticks where no input was queued at all. |
 | `clUpdateCount` | Total input packets received. |
 | `clAddedUpdateCount` | Total input packets added to the queue. |
@@ -218,6 +219,7 @@ public enum DesyncReason
     LATE_TICK                 = 5,
     TICK_OVERFLOW             = 6,
     CATCHUP                   = 7,
+    REBUFFER                  = 8, // BUFFER_ONCE = false: a tick left the queue empty, buffering restarts
 }
 ```
 

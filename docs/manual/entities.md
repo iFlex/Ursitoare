@@ -164,7 +164,7 @@ PredictionManager.Instance.OnClientStateReceived(connId, clientTickId, inputReco
 
 The entity queues the input in `inputQueue`. Each tick, `ServerSimulationTick` dequeues the next input and applies it.
 
-**Initial buffering.** `USE_BUFFERING = true` holds off processing until `BUFFER_FULL_THRESHOLD` inputs have accumulated. This smooths out jitter from irregular network delivery.
+**Initial buffering.** `USE_BUFFERING = true` holds off processing until `BUFFER_FULL_THRESHOLD` inputs have accumulated. This smooths out jitter from irregular network delivery. By default this happens once per ownership assignment. With `BUFFER_ONCE = false` it happens again every time a tick leaves the queue empty: the entity keeps running on its last input until the threshold is reached again. That rebuilds the cushion after packet loss or a latency increase, at the cost of those extra ticks.
 
 **Catchup.** If the input queue grows large (the server has fallen behind), the entity processes multiple inputs per tick to catch up. The catchup rate is controlled by `catchupSections` and `ticksPerCatchupSection`.
 

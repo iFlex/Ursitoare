@@ -1,7 +1,8 @@
 ﻿// Copyright (c) 2026 Milorad Liviu Felix
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
-#if (UNITY_EDITOR) 
+#if (UNITY_EDITOR)
+using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 using Sector0.Ursitoare.Components;
@@ -50,7 +51,15 @@ namespace Sector0.Ursitoare.Tests
             entity = new ServerPredictedEntity(0 , 20, rigidbody, test, new []{component}, new[]{component});
             physicsController = new MockPhysicsController();
             ServerPredictedEntity.USE_BUFFERING = false;
+            ServerPredictedEntity.BUFFER_ONCE = true;
             ServerPredictedEntity.CATCHUP = false;
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            //Static, so a rebuffering test must not leak into other test classes.
+            ServerPredictedEntity.BUFFER_ONCE = true;
         }
 
         static PredictionInputRecord[] GeneratePlayerInputReports(Vector3[] inputs)
@@ -376,7 +385,10 @@ namespace Sector0.Ursitoare.Tests
         {
             uint svTick = 0;
             ServerPredictedEntity.USE_BUFFERING = true;
+            ServerPredictedEntity.BUFFER_ONCE = false;
             ServerPredictedEntity.BUFFER_FULL_THRESHOLD = 3;
+            //Buffering is armed on ownership assignment, which calls Reset.
+            entity.Reset();
 
             Vector3[] serverInput =
             {
@@ -472,6 +484,167 @@ namespace Sector0.Ursitoare.Tests
             }
             Assert.AreEqual(4, entity.totalBufferingTicks);
             Assert.AreEqual(4, entity.totalMissingInputTicks);
+            //Once after tick 6 drained the queue, once after tick 9.
+            Assert.AreEqual(2, entity.totalRebuffers);
+        }
+
+        [Test]
+        public void TestBufferOnceDoesNotRebufferAfterDraining()
+        {
+            uint svTick = 0;
+            ServerPredictedEntity.USE_BUFFERING = true;
+            ServerPredictedEntity.BUFFER_ONCE = true;
+            ServerPredictedEntity.BUFFER_FULL_THRESHOLD = 3;
+            entity.Reset();
+
+            for (uint i = 1; i <= 3; i++)
+                entity.BufferClientTick(i, reports[i]);
+            for (int i = 1; i <= 3; i++)
+            {
+                entity.ServerSimulationTick();
+                Assert.AreEqual(i, entity.SamplePhysicsState(++svTick).tickId);
+            }
+
+            //Drained. A single new input is consumed straight away instead of waiting for the buffer to refill.
+            entity.ServerSimulationTick();
+            entity.SamplePhysicsState(++svTick);
+            entity.BufferClientTick(4, reports[4]);
+            entity.ServerSimulationTick();
+            Assert.AreEqual(4, entity.SamplePhysicsState(++svTick).tickId);
+            Assert.AreEqual(0, entity.totalRebuffers);
+        }
+
+        [Test]
+        public void TestRebufferWaitsForThresholdAfterDraining()
+        {
+            uint svTick = 0;
+            ServerPredictedEntity.USE_BUFFERING = true;
+            ServerPredictedEntity.BUFFER_ONCE = false;
+            ServerPredictedEntity.BUFFER_FULL_THRESHOLD = 3;
+            entity.Reset();
+
+            for (uint i = 1; i <= 3; i++)
+                entity.BufferClientTick(i, reports[i]);
+            for (int i = 1; i <= 3; i++)
+            {
+                entity.ServerSimulationTick();
+                Assert.AreEqual(i, entity.SamplePhysicsState(++svTick).tickId);
+            }
+            //Tick 3 emptied the queue.
+            Assert.AreEqual(1, entity.totalRebuffers);
+
+            //Inputs 4 and 5 are held back until the threshold is reached again, the tick stays on 3.
+            entity.BufferClientTick(4, reports[4]);
+            entity.ServerSimulationTick();
+            Assert.AreEqual(3, entity.SamplePhysicsState(++svTick).tickId);
+            entity.BufferClientTick(5, reports[5]);
+            entity.ServerSimulationTick();
+            Assert.AreEqual(3, entity.SamplePhysicsState(++svTick).tickId);
+
+            entity.BufferClientTick(6, reports[6]);
+            for (int i = 4; i <= 6; i++)
+            {
+                entity.ServerSimulationTick();
+                Assert.AreEqual(i, entity.SamplePhysicsState(++svTick).tickId);
+            }
+            Assert.AreEqual(2, entity.totalRebuffers);
+        }
+
+        [Test]
+        public void TestRebufferDispatchesEvent()
+        {
+            ServerPredictedEntity.USE_BUFFERING = true;
+            ServerPredictedEntity.BUFFER_ONCE = false;
+            ServerPredictedEntity.BUFFER_FULL_THRESHOLD = 3;
+            entity.Reset();
+
+            List<ServerPredictedEntity.DesyncEvent> desyncs = new List<ServerPredictedEntity.DesyncEvent>();
+            entity.potentialDesync.AddEventListener(desyncs.Add);
+
+            for (uint i = 1; i <= 3; i++)
+                entity.BufferClientTick(i, reports[i]);
+            for (uint i = 1; i <= 3; i++)
+            {
+                entity.ServerSimulationTick();
+                entity.SamplePhysicsState(i);
+            }
+
+            List<ServerPredictedEntity.DesyncEvent> rebuffers = desyncs.FindAll(d => d.reason == ServerPredictedEntity.DesyncReason.REBUFFER);
+            Assert.AreEqual(1, rebuffers.Count);
+            Assert.AreEqual(3, rebuffers[0].tickId);
+        }
+
+        [Test]
+        public void TestRebufferRequiresUseBuffering()
+        {
+            ServerPredictedEntity.USE_BUFFERING = false;
+            ServerPredictedEntity.BUFFER_ONCE = false;
+            ServerPredictedEntity.BUFFER_FULL_THRESHOLD = 3;
+            entity.Reset();
+
+            //Every input is consumed on arrival, emptying the queue each tick, and is never held back.
+            for (uint i = 1; i <= 5; i++)
+            {
+                entity.BufferClientTick(i, reports[i]);
+                entity.ServerSimulationTick();
+                Assert.AreEqual(i, entity.SamplePhysicsState(i).tickId);
+            }
+            Assert.AreEqual(0, entity.totalRebuffers);
+        }
+
+        [Test]
+        public void TestNoRebufferWhileInputsRemainQueued()
+        {
+            uint svTick = 0;
+            ServerPredictedEntity.USE_BUFFERING = true;
+            ServerPredictedEntity.BUFFER_ONCE = false;
+            ServerPredictedEntity.BUFFER_FULL_THRESHOLD = 3;
+            entity.Reset();
+
+            for (uint i = 1; i <= 3; i++)
+                entity.BufferClientTick(i, reports[i]);
+
+            //Steady delivery, one input per tick, so the queue never runs empty.
+            for (uint i = 1; i < 20; i++)
+            {
+                entity.BufferClientTick(i + 3, reports[(i + 3) % reports.Length]);
+                entity.ServerSimulationTick();
+                Assert.AreEqual(i, entity.SamplePhysicsState(++svTick).tickId);
+            }
+            Assert.AreEqual(0, entity.totalRebuffers);
+        }
+
+        [Test]
+        public void TestLateInputArrivingDuringRebufferFillsGap()
+        {
+            uint svTick = 0;
+            ServerPredictedEntity.USE_BUFFERING = true;
+            ServerPredictedEntity.BUFFER_ONCE = false;
+            ServerPredictedEntity.BUFFER_FULL_THRESHOLD = 3;
+            entity.Reset();
+
+            for (uint i = 1; i <= 3; i++)
+                entity.BufferClientTick(i, reports[i]);
+            for (int i = 1; i <= 3; i++)
+            {
+                entity.ServerSimulationTick();
+                Assert.AreEqual(i, entity.SamplePhysicsState(++svTick).tickId);
+            }
+
+            //Input 4 is delayed, 5 and 6 overtake it. Without rebuffering the server would jump straight to 5.
+            entity.BufferClientTick(5, reports[5]);
+            entity.BufferClientTick(6, reports[6]);
+            entity.ServerSimulationTick();
+            Assert.AreEqual(3, entity.SamplePhysicsState(++svTick).tickId);
+
+            entity.BufferClientTick(4, reports[4]);
+            for (int i = 4; i <= 6; i++)
+            {
+                entity.ServerSimulationTick();
+                Assert.AreEqual(i, entity.SamplePhysicsState(++svTick).tickId);
+            }
+            Assert.AreEqual(0, entity.inputJumps);
+            Assert.AreEqual(0, entity.lateTickCount);
         }
         
 
