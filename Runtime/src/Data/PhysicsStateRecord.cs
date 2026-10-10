@@ -61,6 +61,23 @@ namespace Sector0.Ursitoare.Data
             angularVelocity = rigidbody.angularVelocity;
         }
 
+        public void From(PhysicsStateRecord record, uint tickOverride)
+        {
+            From(record);
+            tickId = tickOverride;
+        }
+
+        public bool Fit(PhysicsStateRecord other)
+        {
+            bool noInput = input == null && other.input == null;
+            bool fitInput = input != null && other.input != null && input.Fit(other.input);
+            
+            bool noComponentState = componentState == null && other.componentState == null;
+            bool fitComponentState = componentState != null && other.componentState != null && componentState.Fit(other.componentState);
+            
+            return (noInput || fitInput) && (noComponentState || fitComponentState);
+        }
+        
         public void From(PhysicsStateRecord record)
         {
             tickId = record.tickId;
@@ -68,35 +85,50 @@ namespace Sector0.Ursitoare.Data
             rotation = record.rotation;
             velocity = record.velocity;
             angularVelocity = record.angularVelocity;
-
-            if (input == null)
-            {
-                //TODO: configure if this is an accepted risk. using the instance of the passed in record is shallow copy not deep copy like this intends to be
-                input = record.input;
-            }
-            else if (record.input != null)
+            
+            if (input != null && record.input != null && input.Fit(record.input))
             {
                 input.From(record.input);
             }
-
-            if (componentState != null && record.componentState != null)
+            if (componentState != null && record.componentState != null && componentState.Fit(record.componentState))
             {
                 componentState.From(record.componentState);
             }
         }
+        
+        //TODO: decide where to use FromAll
+        public void FromAll(PhysicsStateRecord record)
+        {
+            From(record);
+            
+            if (record.input != null)
+            {
+                input ??= new PredictionInputRecord(record.input);
+                input.From(record.input);
+            }
+            else
+            {
+                input?.WriteReset();
+            }
+            
+            if (record.componentState != null)
+            {
+                componentState ??= new PredictionInputRecord(record.componentState);
+                componentState.From(record.componentState);
+            }
+            else
+            {
+                componentState?.WriteReset();
+            }
+        }
 
+        
         public void To(Rigidbody r)
         {
             r.position = position;
             r.rotation = rotation;
             r.linearVelocity = velocity;
             r.angularVelocity = angularVelocity;
-        }
-        
-        public void From(PhysicsStateRecord record, uint tickOverride)
-        {
-            From(record);
-            tickId = tickOverride;
         }
 
         public override string ToString()

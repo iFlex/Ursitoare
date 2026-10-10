@@ -23,21 +23,7 @@ namespace Sector0.Ursitoare
         //Errors and warnings (e.g. NULL_PREDICTED_GAME_OBJECT, POTENTIAL_EXPLOIT_ATTEMPT). Off by default like all other logging; turn on while integrating or debugging.
         public static bool LOG_ERRORS = false;
         public static bool LOG_TIMING = false;
-        public static bool DO_RESIM = true;
-        public static bool DO_SNAP = true;
-
-        public static bool PREDICT_FOLLOWERS = true;
         public static bool LOG_PRE_SIM_STATE = false;
-        public static bool PREDICTION_ENABLED = true;
-        //FUDO: we might not need the RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD, it gives some good flexibilty for now.
-        public static float RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 0;
-        public static float RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 0;
-        public static bool TRACK_TIMING_STATS = true;
-        public static int MISSING_PACKETS_BUFFER_SIZE = 10;
-        public static int RESIM_TICK_COUNT_BUFFER_SIZE = 30;
-        public static bool TRACK_PACKET_LOSS = true;
-        
-        public static int CLIENT_RTT_MEASUREMENTS_BUFFER_SIZE = 20;
         
         //TODO: validate presence of all static providers
         //TODO: move to client impl
@@ -115,7 +101,7 @@ namespace Sector0.Ursitoare
         public bool oversimProtectWithTickInterval = true;
         public uint minTicksBetweenResims = 0;
         
-        public PredictionManager()
+        protected PredictionManager()
         {
             Instance = this;
             _tickTimer = TIMER_PROVIDER();
@@ -226,54 +212,9 @@ namespace Sector0.Ursitoare
             clientLastReceivedTickId = 0;
         }
         
-        public static uint GetServerTickDelay()
-        {
-            return (uint) Mathf.CeilToInt((float)(ROUND_TRIP_GETTER() / Time.fixedDeltaTime));
-        }
-        
-        public struct EntityProcessingError
-        {
-            public Exception exception;
-            public uint entityId;
-        }
-        
-        public struct ServerUpdateSendError
-        {
-            public Exception exception;
-            public int connId;
-            public uint entityId;
-            public uint tickId;
-        }
-        
         public uint GetTotalTicks()
         {
             return tickId;
-        }
-        
-        public uint GetAverageResimPerTick()
-        {
-            return totalResimulationSteps / tickId;
-        }
-
-        public struct TickRttRecord
-        {
-            public uint tickId;
-            public double sentTime;
-
-            public override bool Equals(object obj)
-            {
-                if (obj is TickRttRecord rec)
-                {
-                    return tickId == rec.tickId;
-                }
-                return false;
-            }
-        }
-
-        public struct TickRttDuration
-        {
-            public uint tickId;
-            public double duration;
         }
         
         public struct TickStat
@@ -286,17 +227,7 @@ namespace Sector0.Ursitoare
         }
         
         public SafeEventDispatcher<uint> onPreTick = new();
-        public SafeEventDispatcher<uint> onPreResimTick = new();
         public SafeEventDispatcher<uint> onPostTick = new();
-        public SafeEventDispatcher<uint> onPostResimTick = new();
         public SafeEventDispatcher<TickStat> onTickStat = new();
-        public SafeEventDispatcher<TickRttDuration> onTickRttDuration = new();
-        public SafeEventDispatcher<int> onPacketLoss = new();
-            
-        public SafeEventDispatcher<ServerUpdateSendError> onServerStateSendError = new();
-        public SafeEventDispatcher<EntityProcessingError> onClientStateSendError = new();
-        public SafeEventDispatcher<bool> resimulation = new();
-        public SafeEventDispatcher<bool> resimulationStep = new();
-        public SafeEventDispatcher<uint> onSnapToServer = new();
     }
 }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Sector0.Events;
 using Sector0.Ursitoare.Components;
 using Sector0.Ursitoare.Data;
 using UnityEngine;
@@ -201,7 +202,6 @@ namespace Sector0.Ursitoare
             }
         }
     
-        //TODO: unit test
         void SetOwnership(ServerPredictedEntity entity, int ownerId)
         {
             if (entity == null || ownerId == invalidConnectionId)
@@ -300,7 +300,9 @@ namespace Sector0.Ursitoare
         //FODO: performance
         uint GetLatestAppliedTickForConnection(int connId)
         {
-            return _connIdToLatestTick.GetValueOrDefault(connId, tickId);
+            //return _connIdToLatestTick.GetValueOrDefault(connId, tickId);
+            //NOTE: ALL connections, even spectators must report their tickId to the server via Heartbeat
+            return _connIdToLatestTick.GetValueOrDefault(connId, 0u);
         }
 
         public void OnHeartbeatReceived(int connectionId, uint tid)
@@ -390,5 +392,15 @@ namespace Sector0.Ursitoare
             _connIdToEntity.Clear();
             _connIdToLatestTick.Clear();
         }
+        
+        public struct ServerUpdateSendError
+        {
+            public Exception exception;
+            public int connId;
+            public uint entityId;
+            public uint tickId;
+        }
+        
+        public SafeEventDispatcher<ServerUpdateSendError> onServerStateSendError = new();
     }
 }

@@ -47,8 +47,8 @@ namespace Sector0.Ursitoare.Tests
         [SetUp]
         public void SetUp()
         {
-            followersSqrDistance = PredictionManager.RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD;
-            preciseFollowersSqrDistance = PredictionManager.RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD;
+            followersSqrDistance = ClientPredictionManager.RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD;
+            preciseFollowersSqrDistance = ClientPredictionManager.RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD;
             serverUseBuffering = ServerPredictedEntity.USE_BUFFERING;
             serverBufferFullThreshold = ServerPredictedEntity.BUFFER_FULL_THRESHOLD;
             connections = Array.Empty<int>();
@@ -69,8 +69,8 @@ namespace Sector0.Ursitoare.Tests
         [TearDown]
         public void TearDown()
         {
-            PredictionManager.RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = followersSqrDistance;
-            PredictionManager.RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = preciseFollowersSqrDistance;
+            ClientPredictionManager.RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = followersSqrDistance;
+            ClientPredictionManager.RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = preciseFollowersSqrDistance;
             ServerPredictedEntity.USE_BUFFERING = serverUseBuffering;
             ServerPredictedEntity.BUFFER_FULL_THRESHOLD = serverBufferFullThreshold;
             managerServer.Clear();
@@ -780,8 +780,8 @@ namespace Sector0.Ursitoare.Tests
         public void FollowerResimulationUsesDistanceToLocalEntities()
         {
             const int LOCAL = 0, NEAR = 1, FAR = 2;
-            PredictionManager.RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 10 * 10;
-            PredictionManager.RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 5 * 5;
+            ClientPredictionManager.RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 10 * 10;
+            ClientPredictionManager.RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 5 * 5;
 
             CreateEntities(3);
             PlaceClientEntity(LOCAL, Vector3.zero);

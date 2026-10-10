@@ -441,10 +441,10 @@ namespace Sector0.Ursitoare.Tests
         public void DisablingPredictionSnapsLocalEntityToServerState()
         {
             //NOTE: must follow the flag the prediction tick uses (PredictionMngr), not the legacy PredictionManager one
-            bool predictionEnabled = PredictionManager.PREDICTION_ENABLED;
+            bool predictionEnabled = ClientPredictionManager.PREDICTION_ENABLED;
             try
             {
-                PredictionManager.PREDICTION_ENABLED = false;
+                ClientPredictionManager.PREDICTION_ENABLED = false;
                 rigidbody.position = Vector3.zero;
                 entity.ClientSimulationTick(1);
                 entity.SamplePhysicsState(1);
@@ -458,7 +458,7 @@ namespace Sector0.Ursitoare.Tests
             }
             finally
             {
-                PredictionManager.PREDICTION_ENABLED = predictionEnabled;
+                ClientPredictionManager.PREDICTION_ENABLED = predictionEnabled;
             }
         }
 
@@ -550,6 +550,116 @@ namespace Sector0.Ursitoare.Tests
 
             Assert.Catch<Exception>(() => misreporting.SampleInput(1));
         }
+
+        #region FOLLOWER SNAPPING
+
+        //Follower: an entity controlled by someone else. A controllable follower has input driven components (another
+        //player), a non-controllable one only contributes forces / state (a ball, a crate).
+        ClientPredictedEntity CreateFollower(bool controllable)
+        {
+            PredictableControllableComponent[] controllables = controllable
+                ? new PredictableControllableComponent[] { component }
+                : Array.Empty<PredictableControllableComponent>();
+            ClientPredictedEntity follower = new ClientPredictedEntity(1, false, 20, rigidbody, test, controllables, new PredictableComponent[] { component });
+            follower.SetControlledLocally(false);
+            Assert.AreEqual(controllable, follower.IsControllable(), "Test setup: wrong kind of follower");
+            return follower;
+        }
+
+        static PhysicsStateRecord ServerStateAt(uint tickId, Vector3 position)
+        {
+            PhysicsStateRecord state = PhysicsStateRecord.Alloc();
+            state.tickId = tickId;
+            state.position = position;
+            state.rotation = Quaternion.identity;
+            return state;
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public void NotPredictedFollowerSnapsToNewestServerState(bool controllable)
+        {
+            ClientPredictedEntity follower = CreateFollower(controllable);
+            follower.predictAsFollower = false;
+            Vector3 newestServerPosition = new Vector3(10, 0, 0);
+            follower.BufferServerTick(5, ServerStateAt(4, new Vector3(9, 0, 0)));
+            follower.BufferServerTick(5, ServerStateAt(5, newestServerPosition));
+
+            follower.ClientFollowerSimulationTick(6);
+
+            Assert.AreEqual(newestServerPosition, rigidbody.position, "Follower that is not predicted was not moved to the newest server state");
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public void PredictedFollowerIsNotSnappedToServerState(bool controllable)
+        {
+            ClientPredictedEntity follower = CreateFollower(controllable);
+            follower.predictAsFollower = true;
+            Vector3 position = rigidbody.position;
+            follower.BufferServerTick(5, ServerStateAt(5, new Vector3(10, 0, 0)));
+
+            follower.ClientFollowerSimulationTick(6);
+
+            //NOTE: a predicted follower is corrected by resimulation, not by snapping
+            Assert.AreEqual(position, rigidbody.position);
+        }
+
+        //NOTE: between server updates the follower keeps moving on its own, it must not be pulled back to a server
+        //      state it already applied.
+        [TestCase(true)]
+        [TestCase(false)]
+        public void NotPredictedFollowerSnapsOnlyWhenANewerServerStateArrives(bool controllable)
+        {
+            ClientPredictedEntity follower = CreateFollower(controllable);
+            follower.predictAsFollower = false;
+            follower.BufferServerTick(5, ServerStateAt(5, new Vector3(10, 0, 0)));
+            follower.ClientFollowerSimulationTick(6);
+
+            Vector3 movedOnItsOwn = new Vector3(12, 0, 0);
+            rigidbody.position = movedOnItsOwn;
+            follower.ClientFollowerSimulationTick(7);
+            Assert.AreEqual(movedOnItsOwn, rigidbody.position, "Follower was snapped again to a server state it had already applied");
+
+            Vector3 newerServerPosition = new Vector3(11, 0, 0);
+            follower.BufferServerTick(7, ServerStateAt(6, newerServerPosition));
+            follower.ClientFollowerSimulationTick(8);
+            Assert.AreEqual(newerServerPosition, rigidbody.position, "Follower was not snapped to the newer server state");
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public void NotPredictedFollowerWithoutServerStateStaysInPlaceAndAppliesForces(bool controllable)
+        {
+            ClientPredictedEntity follower = CreateFollower(controllable);
+            follower.predictAsFollower = false;
+            Vector3 position = rigidbody.position;
+
+            Assert.DoesNotThrow(() => follower.ClientFollowerSimulationTick(1));
+
+            Assert.AreEqual(position, rigidbody.position);
+            Assert.AreEqual(1, component.forceApplyCallCount, "Follower tick must always apply forces");
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public void ControllableFollowerLoadsServerInputWhetherPredictedOrNot(bool predicted)
+        {
+            ClientPredictedEntity follower = CreateFollower(true);
+            follower.predictAsFollower = predicted;
+            PhysicsStateRecord serverState = ServerStateAt(5, Vector3.zero);
+            serverState.input = new PredictionInputRecord(3, 0);
+            serverState.input.WriteNextScalar(1);
+            serverState.input.WriteNextScalar(2);
+            serverState.input.WriteNextScalar(3);
+            follower.BufferServerTick(5, serverState);
+
+            follower.ClientFollowerSimulationTick(6);
+
+            Assert.AreEqual(new Vector3(1, 2, 3), component.stateVector, "Controllable follower did not load the input the server reported");
+        }
+
+        #endregion
     }
 }
 #endif

@@ -136,8 +136,9 @@ namespace Sector0.Ursitoare.Tests
             Assert.AreEqual(0, su12.state.tickId);
             Assert.AreEqual(0, su21.state.tickId);
             Assert.AreEqual(0, su22.state.tickId);
-            Assert.AreEqual(1, su31.state.tickId);
-            Assert.AreEqual(1, su32.state.tickId);
+            //Connection 3 owns nothing and never sent a heartbeat, so its tick is unknown: stamped 0, never the server's tick
+            Assert.AreEqual(0, su31.state.tickId);
+            Assert.AreEqual(0, su32.state.tickId);
             sentStates.Clear();
 
             PredictionInputRecord pir1 = new PredictionInputRecord(3, 0);
@@ -177,8 +178,8 @@ namespace Sector0.Ursitoare.Tests
             Assert.AreEqual(10, su12.state.tickId);
             Assert.AreEqual(15, su21.state.tickId);
             Assert.AreEqual(15, su22.state.tickId);
-            Assert.AreEqual(2, su31.state.tickId);
-            Assert.AreEqual(2, su32.state.tickId);
+            Assert.AreEqual(0, su31.state.tickId);
+            Assert.AreEqual(0, su32.state.tickId);
             sentStates.Clear();
             manager.Tick();
             
@@ -193,8 +194,8 @@ namespace Sector0.Ursitoare.Tests
             Assert.AreEqual(10, su12.state.tickId);
             Assert.AreEqual(15, su21.state.tickId);
             Assert.AreEqual(15, su22.state.tickId);
-            Assert.AreEqual(3, su31.state.tickId);
-            Assert.AreEqual(3, su32.state.tickId);
+            Assert.AreEqual(0, su31.state.tickId);
+            Assert.AreEqual(0, su32.state.tickId);
             sentStates.Clear();
             
             manager.OnClientStateReceived(1, 12, 1, pir1);
@@ -212,8 +213,8 @@ namespace Sector0.Ursitoare.Tests
             Assert.AreEqual(12, su12.state.tickId);
             Assert.AreEqual(16, su21.state.tickId);
             Assert.AreEqual(16, su22.state.tickId);
-            Assert.AreEqual(4, su31.state.tickId);
-            Assert.AreEqual(4, su32.state.tickId);
+            Assert.AreEqual(0, su31.state.tickId);
+            Assert.AreEqual(0, su32.state.tickId);
         }
         
         

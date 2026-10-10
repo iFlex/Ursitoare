@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
 #if (UNITY_EDITOR)
+using System;
 using NUnit.Framework;
 using Sector0.Ursitoare.Components;
 using Sector0.Ursitoare.Data;
@@ -26,15 +27,18 @@ namespace Sector0.Ursitoare.Tests
         bool savedIgnoreNonAuthResimDecisions;
         float savedFollowersSqrDistanceThreshold;
         float savedPreciseFollowersSqrDistanceThreshold;
+        bool savedPredictFollowers;
 
         [SetUp]
         public void SetUp()
         {
-            savedFollowersSqrDistanceThreshold = PredictionManager.RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD;
-            savedPreciseFollowersSqrDistanceThreshold = PredictionManager.RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD;
+            savedFollowersSqrDistanceThreshold = ClientPredictionManager.RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD;
+            savedPreciseFollowersSqrDistanceThreshold = ClientPredictionManager.RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD;
+            savedPredictFollowers = ClientPredictionManager.PREDICT_FOLLOWERS;
 
-            PredictionManager.RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 0;
-            PredictionManager.RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 0;
+            ClientPredictionManager.PREDICT_FOLLOWERS = true;
+            ClientPredictionManager.RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 0;
+            ClientPredictionManager.RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 0;
 
             localGo = new GameObject("local");
             localGo.transform.position = Vector3.zero;
@@ -53,8 +57,9 @@ namespace Sector0.Ursitoare.Tests
         [TearDown]
         public void TearDown()
         {
-            PredictionManager.RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = savedFollowersSqrDistanceThreshold;
-            PredictionManager.RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = savedPreciseFollowersSqrDistanceThreshold;
+            ClientPredictionManager.RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = savedFollowersSqrDistanceThreshold;
+            ClientPredictionManager.RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = savedPreciseFollowersSqrDistanceThreshold;
+            ClientPredictionManager.PREDICT_FOLLOWERS = savedPredictFollowers;
 
             GameObject.Destroy(localGo);
             GameObject.Destroy(followerGo);
@@ -148,7 +153,7 @@ namespace Sector0.Ursitoare.Tests
         [Test]
         public void TestFarFollowerIsNotPredictedWhenOutsideDistanceThreshold()
         {
-            PredictionManager.RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 1f; // 1 m
+            ClientPredictionManager.RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 1f; // 1 m
             AddLocalEntity();
             MockClientPredictedEntity follower = AddControllableFollower(PredictionDecision.NOOP, 0);
             followerGo.transform.position = new Vector3(100, 0, 0);
@@ -162,7 +167,7 @@ namespace Sector0.Ursitoare.Tests
         [Test]
         public void TestNearFollowerIsPredictedWhenInsideDistanceThreshold()
         {
-            PredictionManager.RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 1f; // 1 m
+            ClientPredictionManager.RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 1f; // 1 m
             AddLocalEntity();
             MockClientPredictedEntity follower = AddControllableFollower(PredictionDecision.NOOP, 0);
             followerGo.transform.position = new Vector3(0.5f, 0, 0);
@@ -175,7 +180,7 @@ namespace Sector0.Ursitoare.Tests
         [Test]
         public void TestFarFollowerDoesNotUsePreciseCheckerWhenOutsidePreciseThreshold()
         {
-            PredictionManager.RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 9f; // 3 m
+            ClientPredictionManager.RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 9f; // 3 m
             AddLocalEntity();
             MockClientPredictedEntity follower = AddControllableFollower(PredictionDecision.NOOP, 0);
             followerGo.transform.position = new Vector3(100, 0, 0);
@@ -185,6 +190,93 @@ namespace Sector0.Ursitoare.Tests
             Assert.IsFalse(follower.usePreciseResimChecker,
                 "Follower 100 m away uses the precise checker with a 3 m threshold: distance is measured as 0.");
         }
+
+        #region FOLLOWER SNAPPING
+
+        //Follower (id 2) that never asks for a resimulation by itself, so the only correction it can get is a snap.
+        //Controllable: has input driven components (another player). Non-controllable: only forces / state (a ball).
+        MockClientPredictedEntity AddFollower(bool controllable)
+        {
+            PredictableControllableComponent[] controllables = controllable
+                ? new PredictableControllableComponent[] { followerComponent }
+                : Array.Empty<PredictableControllableComponent>();
+            MockClientPredictedEntity follower = new MockClientPredictedEntity(2, false, 20, followerComponent.rigidbody, followerGo,
+                controllables, new PredictableComponent[] { followerComponent });
+            follower._predictionDecision = PredictionDecision.NOOP;
+            manager.AddPredictedEntity(follower);
+            Assert.AreEqual(controllable, follower.IsControllable(), "Test setup: wrong kind of follower");
+            return follower;
+        }
+
+        //First tick runs without server data, the second one has a newer server state to act on.
+        void TickWithServerStateForFollower(Vector3 serverPosition)
+        {
+            manager.Tick();
+            manager.OnServerStateReceived(2, ServerStateAt(1, serverPosition));
+            manager.Tick();
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public void FollowerIsSnappedToServerWhenFollowersAreNotPredicted(bool controllable)
+        {
+            ClientPredictionManager.PREDICT_FOLLOWERS = false;
+            AddLocalEntity();
+            MockClientPredictedEntity follower = AddFollower(controllable);
+            Vector3 serverPosition = new Vector3(10, 0, 0);
+
+            TickWithServerStateForFollower(serverPosition);
+
+            Assert.IsFalse(follower.predictAsFollower, "Test setup: follower should not be predicted");
+            Assert.AreEqual(serverPosition, followerComponent.rigidbody.position, "Follower that is not predicted was not snapped to the server state");
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public void FollowerIsSnappedToServerWhenThereIsNoLocalEntity(bool controllable)
+        {
+            //e.g. a spectator, or a player waiting to respawn
+            MockClientPredictedEntity follower = AddFollower(controllable);
+            Vector3 serverPosition = new Vector3(10, 0, 0);
+
+            TickWithServerStateForFollower(serverPosition);
+
+            Assert.IsFalse(follower.predictAsFollower, "Test setup: follower should not be predicted");
+            Assert.AreEqual(serverPosition, followerComponent.rigidbody.position, "Follower was not snapped to the server state while there is no local entity");
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public void FollowerBeyondDistanceThresholdIsSnappedToServer(bool controllable)
+        {
+            ClientPredictionManager.RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 1f; // 1 m
+            AddLocalEntity();
+            MockClientPredictedEntity follower = AddFollower(controllable);
+            followerGo.transform.position = new Vector3(100, 0, 0);
+            Vector3 serverPosition = new Vector3(110, 0, 0);
+
+            TickWithServerStateForFollower(serverPosition);
+
+            Assert.IsFalse(follower.predictAsFollower, "Test setup: follower 100 m away should not be predicted with a 1 m threshold");
+            Assert.AreEqual(serverPosition, followerComponent.rigidbody.position, "Far follower that is not predicted was not snapped to the server state");
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public void PredictedFollowerIsNotSnappedToServer(bool controllable)
+        {
+            AddLocalEntity();
+            MockClientPredictedEntity follower = AddFollower(controllable);
+            Vector3 position = followerComponent.rigidbody.position;
+
+            TickWithServerStateForFollower(new Vector3(10, 0, 0));
+
+            Assert.IsTrue(follower.predictAsFollower, "Test setup: follower should be predicted");
+            //NOTE: a predicted follower is corrected by resimulation (its own request counts), not by snapping
+            Assert.AreEqual(position, followerComponent.rigidbody.position);
+        }
+
+        #endregion
     }
 }
 #endif

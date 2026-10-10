@@ -25,6 +25,12 @@ namespace Sector0.Ursitoare.Data
             binaryInput = new bool[binaryCapacity];
         }
 
+        public PredictionInputRecord(PredictionInputRecord other)
+        {
+            scalarInput = new float[other.scalarInput.Length];
+            binaryInput = new bool[other.binaryInput.Length];
+        }
+
         public void WriteReset()
         {
             scalarFillIndex = 0;
@@ -68,8 +74,23 @@ namespace Sector0.Ursitoare.Data
             binaryInput[binaryFillIndex++] = binary;
         }
 
+        public bool Fit(PredictionInputRecord other)
+        {
+            return scalarInput.Length >= other.scalarInput.Length && binaryInput.Length >= other.binaryInput.Length;    
+        }
+        
         public void From(PredictionInputRecord other)
         {
+            //TODO: issue allocation warning here so that one can analyse if they are unintentionally allocating
+            if (scalarInput.Length < other.scalarInput.Length)
+            {
+                scalarInput = new float[other.scalarInput.Length];
+            }
+            if (binaryInput.Length < other.binaryInput.Length)
+            {
+                binaryInput = new bool[other.binaryInput.Length];
+            }
+            
             for (int i = 0; i < other.scalarInput.Length && i < scalarInput.Length; ++i)
             {
                 scalarInput[i] = other.scalarInput[i];
@@ -78,6 +99,11 @@ namespace Sector0.Ursitoare.Data
             {
                 binaryInput[i] = other.binaryInput[i];   
             }
+            
+            WriteReset();
+            ReadReset();
+            scalarFillIndex = other.scalarFillIndex;
+            binaryFillIndex = other.binaryFillIndex;
         }
 
         public override string ToString()

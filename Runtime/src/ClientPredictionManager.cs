@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using Sector0.Events;
 using Sector0.Ursitoare.Components;
 using Sector0.Ursitoare.Data;
 using Sector0.Ursitoare.Utils;
@@ -10,28 +11,37 @@ namespace Sector0.Ursitoare
 {
     public class ClientPredictionManager : PredictionManager
     {
+        public static bool DO_SNAP = true;
+        public static bool PREDICTION_ENABLED = true;
+        public static bool PREDICT_FOLLOWERS = true;
+        
+        //FUDO: we might not need the RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD, it gives some good flexibilty for now.
+        public static float RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 0;
+        public static float RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD = 0;
+        public static int MISSING_PACKETS_BUFFER_SIZE = 10;
+        public static int RESIM_TICK_COUNT_BUFFER_SIZE = 30;
+        public static bool TRACK_PACKET_LOSS = true;
+        public static int CLIENT_RTT_MEASUREMENTS_BUFFER_SIZE = 20;
+        
         public static ClientPredictionManager Instance;
         
-        //TODO: mark as can be unreliable channel
         //NOTE: heartbeats are only sent when no predicted entity is controlled locally
         //         tickId
         protected Action<uint>                       unreliableClientHeartbeadSender;
-        //TODO: mark as can be unreliable channel
-        //            tickId, inputData
+        //         tickId, inputData
         protected Action<uint, uint, PredictionInputRecord>       unreliableClientStateSender;
 
         protected Dictionary<uint, ClientPredictedEntity> _clientEntities = new Dictionary<uint, ClientPredictedEntity>();
-        protected HashSet<ClientPredictedEntity> localEntity = new HashSet<ClientPredictedEntity>();
-        protected HashSet<uint> localEntityId = new();
+        protected HashSet<ClientPredictedEntity> localEntities = new HashSet<ClientPredictedEntity>();
+        protected HashSet<uint> localEntityIds = new();
         
         private TickIndexedBuffer<bool> missedTicksBuffer = new TickIndexedBuffer<bool>(MISSING_PACKETS_BUFFER_SIZE);
         protected TickIndexedBuffer<TickRttRecord> clientTickRTTBuffer;
         //TODO: is this overkill? should we drop it?
         private TickIndexedBuffer<uint> tickResimCounter = new TickIndexedBuffer<uint>(RESIM_TICK_COUNT_BUFFER_SIZE);
         
-        //TODO read only
-        public bool resimulating = false;
-        
+        public bool resimulating { get; private set; } = false;
+
         public ClientPredictionManager(Action<uint> unreliableClientHeartbeadSender, Action<uint, uint, PredictionInputRecord> unreliableClientStateSender)
         {
             this.unreliableClientHeartbeadSender = unreliableClientHeartbeadSender;
@@ -131,7 +141,7 @@ namespace Sector0.Ursitoare
             entity.SetControlledLocally(alreadyLocallyControlled);
             if (alreadyLocallyControlled)
             {
-                localEntity.Add(entity);
+                localEntities.Add(entity);
             }
             
             if (autoTrackRigidbodies)
@@ -146,7 +156,7 @@ namespace Sector0.Ursitoare
             {
                 if (IsControlledLocally(entity.id))
                 {
-                    localEntity.Remove(entity);
+                    localEntities.Remove(entity);
                     entity.SetControlledLocally(false);
                 }
                 
@@ -168,7 +178,7 @@ namespace Sector0.Ursitoare
 
             if (IsControlledLocally(id))
                 return;
-            localEntityId.Add(id);
+            localEntityIds.Add(id);
             
             var newLocalEntity = _clientEntities.GetValueOrDefault(id, null);
             if (DEBUG || DEBUG_OWNERSHIP || LOG_EVENTS)
@@ -177,7 +187,7 @@ namespace Sector0.Ursitoare
             if (newLocalEntity != null)
             {
                 //FUDO: consider moving the id fetching mechanic inside entity
-                localEntity.Add(newLocalEntity);
+                localEntities.Add(newLocalEntity);
                 newLocalEntity.SetControlledLocally(true);
             }
         }
@@ -190,7 +200,7 @@ namespace Sector0.Ursitoare
             
             if (IsControlledLocally(id))
             {
-                localEntityId.Remove(id);
+                localEntityIds.Remove(id);
                 
                 var remEnt = _clientEntities.GetValueOrDefault(id, null);
                 if (DEBUG || DEBUG_OWNERSHIP || LOG_EVENTS)
@@ -198,7 +208,7 @@ namespace Sector0.Ursitoare
                 
                 if (remEnt != null)
                 {
-                    localEntity.Remove(remEnt);
+                    localEntities.Remove(remEnt);
                     remEnt.SetControlledLocally(false);
                 }
             }
@@ -206,22 +216,22 @@ namespace Sector0.Ursitoare
 
         public HashSet<ClientPredictedEntity> GetLocalEntities()
         {
-            return localEntity;
+            return localEntities;
         }
         
         public bool IsControlledLocally(ClientPredictedEntity entity)
         {
-            return localEntity.Contains(entity);
+            return localEntities.Contains(entity);
         }
         
         public bool IsControlledLocally(uint id)
         {
-            return localEntityId.Contains(id);
+            return localEntityIds.Contains(id);
         }
 
         public bool HasLocallyControlledEntities()
         {
-            return localEntity.Count > 0;
+            return localEntities.Count > 0;
         }
 
         public override uint GetServerTickId()
@@ -263,20 +273,19 @@ namespace Sector0.Ursitoare
             return IsFollower(entity) && !entity.predictAsFollower;
         }
 
-        float GetMinSqrDistToAllLocalEnts()
+        float GetMinSqrDistToAllLocalEnts(ClientPredictedEntity ent)
         {
             float result = float.MaxValue;
-            foreach (var ent in localEntity)
+            foreach (var localEnt in localEntities)
             {
-                if (!ent.gameObject)
+                if (!localEnt.gameObject)
                 {
                     if (LOG_ERRORS)
-                        Debug.LogError($"[ClientPredictionManager][GetMinSqrDistToAllLocalEnts] NULL_PREDICTED_GAME_OBJECT. id:{ent.id}");
+                        Debug.LogError($"[ClientPredictionManager][GetMinSqrDistToAllLocalEnts] NULL_PREDICTED_GAME_OBJECT. id:{localEnt.id}");
                     continue;
                 }
                 
-                //TODO: review
-                float intermediary = (ent.gameObject.transform.position - ent.gameObject.transform.position).sqrMagnitude;
+                float intermediary = (ent.gameObject.transform.position - localEnt.gameObject.transform.position).sqrMagnitude;
                 if (intermediary < result)
                 {
                     result = intermediary;
@@ -294,17 +303,16 @@ namespace Sector0.Ursitoare
                 ent.usePreciseResimChecker = false;
                 return;
             }
-
-            float sqrDistance = GetMinSqrDistToAllLocalEnts();
-            if (RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD > 0)
+			
+			if (RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD == 0)
             {
-                ent.usePreciseResimChecker = sqrDistance < RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD;
-            }
-            if (RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD == 0)
-            {
+				ent.usePreciseResimChecker = false;
                 ent.predictAsFollower = PREDICT_FOLLOWERS;
                 return;
             }
+
+            float sqrDistance = GetMinSqrDistToAllLocalEnts(ent);
+			ent.usePreciseResimChecker = RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD > 0 && sqrDistance < RESIMULATE_PRECISE_FOLLOWERS_SQR_DISTANCE_THRESHOLD;
             ent.predictAsFollower = PREDICT_FOLLOWERS && sqrDistance < RESIMULATE_FOLLOWERS_SQR_DISTANCE_THRESHOLD;
         }
         
@@ -409,9 +417,6 @@ namespace Sector0.Ursitoare
         
         void Resimulate(uint startTick)
         {
-            if (!DO_RESIM)
-                return;
-            
             if (tickId <= startTick)
             {
                 //NOTE: this shouldn't be possible
@@ -571,6 +576,7 @@ namespace Sector0.Ursitoare
         
         void ClientPreSimTick()
         {
+            resimulating = false;
             //Uses latest update for each follower
             foreach (KeyValuePair<uint, ClientPredictedEntity> pair in _clientEntities)
             {
@@ -581,21 +587,12 @@ namespace Sector0.Ursitoare
                     continue;
                 }
                 
-                if (IsControlledLocally(pair.Key))
+                if (IsControlledLocally(pair.Key) && PREDICTION_ENABLED)
                 {
                     if (DEBUG)
                         Debug.Log($"[PredictionManager][ClientPreSimTick] Client:{pair.Value} tick:{tickId}");
                     
-                    PredictionInputRecord tickInputRecord;
-                    if (PREDICTION_ENABLED)
-                    {
-                       tickInputRecord = pair.Value.ClientSimulationTick(tickId);
-                    }
-                    else
-                    {
-                        tickInputRecord = pair.Value.SampleInput(tickId);
-                    }
-                    
+                    PredictionInputRecord tickInputRecord = pair.Value.ClientSimulationTick(tickId);
                     try
                     {
                         if (DEBUG)
@@ -614,6 +611,10 @@ namespace Sector0.Ursitoare
                 else
                 {
                     //Only run this on the pure client
+                    if (!PREDICTION_ENABLED)
+                    {
+                        pair.Value.predictAsFollower = false;
+                    }
                     pair.Value.ClientFollowerSimulationTick(tickId);
                 }
 
@@ -644,6 +645,7 @@ namespace Sector0.Ursitoare
 
         void ClientPostSimTick()
         {
+            resimulating = false;
             foreach (KeyValuePair<uint, ClientPredictedEntity> pair in _clientEntities)
             {
                 if (!pair.Value.gameObject)
@@ -674,7 +676,9 @@ namespace Sector0.Ursitoare
         {
             if (DEBUG)
                 Debug.Log($"[PredictionManager][OnServerStateReceived] entityId:{entityId} stateRecord:{stateRecord}");
-
+            
+            //TODO: ignore server updates from the "future". Why? because the server always uses client tickIds 
+            //      corresponding to each connection. Which means it can never send a tickId that's larger than something the client's already ticked.
             ClientPredictedEntity entity = _clientEntities.GetValueOrDefault(entityId, null);
             if (entity != null)
             {
@@ -733,16 +737,65 @@ namespace Sector0.Ursitoare
             _serverRecvTimer.Start();
         }
         
+        public static uint GetServerTickDelay()
+        {
+            return (uint) Mathf.CeilToInt((float)(ROUND_TRIP_GETTER() / Time.fixedDeltaTime));
+        }
+        
+        public uint GetAverageResimPerTick()
+        {
+            return totalResimulationSteps / tickId;
+        }
+        
         public override void Clear()
         {
+            resimulating = false;
             base.Clear();
-            localEntityId.Clear();
-            localEntity.Clear();
+            localEntityIds.Clear();
+            localEntities.Clear();
             _clientEntities.Clear();
             
             clientTickRTTBuffer.Clear();
             missedTicksBuffer.Clear();
             tickResimCounter.Clear();
         }
+        
+        public struct EntityProcessingError
+        {
+            public Exception exception;
+            public uint entityId;
+        }
+        
+        public struct TickRttRecord
+        {
+            public uint tickId;
+            public double sentTime;
+
+            public override bool Equals(object obj)
+            {
+                if (obj is TickRttRecord rec)
+                {
+                    return tickId == rec.tickId;
+                }
+                return false;
+            }
+        }
+        
+        public struct TickRttDuration
+        {
+            public uint tickId;
+            public double duration;
+        }
+        
+        public SafeEventDispatcher<uint> onPreResimTick = new();
+        public SafeEventDispatcher<uint> onPostResimTick = new();
+        public SafeEventDispatcher<TickRttDuration> onTickRttDuration = new();
+        public SafeEventDispatcher<int> onPacketLoss = new();
+        
+        public SafeEventDispatcher<EntityProcessingError> onClientStateSendError = new();
+        
+        public SafeEventDispatcher<bool> resimulation = new();
+        public SafeEventDispatcher<bool> resimulationStep = new();
+        public SafeEventDispatcher<uint> onSnapToServer = new();
     }
 }

@@ -23,6 +23,7 @@ namespace Sector0.Ursitoare.Interpolation
         public static int SMOOTH_BUFFER_SIZE = 6;
         public static bool INTERPOLATE_MANUAL = false;
         
+        //TODO: inspect memory usage + if there's any unnecessary allocs in this class for PhysicsStateRecords
         RingBuffer<PhysicsStateRecord> buffer = new RingBuffer<PhysicsStateRecord>(BUFFER_SIZE);
         public RingBuffer<PhysicsStateRecord> averagedBuffer = new RingBuffer<PhysicsStateRecord>(SMOOTH_BUFFER_SIZE);
 

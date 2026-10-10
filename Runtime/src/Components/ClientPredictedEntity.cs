@@ -205,53 +205,51 @@ namespace Sector0.Ursitoare.Components
         //TODO: unit test
         public void ClientFollowerSimulationTick(uint tickId)
         {
-            if (isControlledLocally)
+            if (isControlledLocally && ClientPredictionManager.PREDICTION_ENABLED)
             {
                 throw new Exception("COMPONENT_MISUSE: locally controlled entity called ClientFollowerSimulationTick");
             }
 
             isCurrentStateSpeculative = true;
-            if (IsControllable())
+           
+            if (lastAppliedFollowerTick < serverStateBuffer.GetEndTick())
             {
-                if (lastAppliedFollowerTick < serverStateBuffer.GetEndTick())
+                lastAppliedFollowerTick = serverStateBuffer.GetEndTick();
+                PhysicsStateRecord latestServerState = serverStateBuffer.GetEnd();
+                if (latestServerState != null)
                 {
-                    lastAppliedFollowerTick = serverStateBuffer.GetEndTick();
-                    PhysicsStateRecord latestServerState = serverStateBuffer.GetEnd();
-                    if (latestServerState != null)
+                    //TODO: predict as follower might be overkill, reevaluat if it really is needed.
+                    if (!predictAsFollower)
                     {
-                        if (!predictAsFollower)
+                        //If not predicting a follower, then just snap whenever new position data available.
+                        //otherwise let the resimulation do the snapping
+                        isCurrentStateSpeculative = false;
+                        SnapTo(latestServerState);
+                    }
+                    
+                    if (IsControllable() && APPLY_SERVER_INPUT_TO_FOLLOWERS)
+                    {
+                        PredictionInputRecord input = latestServerState.input;
+                        if (input != null)
                         {
-                            //If not predicting a follower, then just snap whenever new position data available.
-                            //otherwise let the resimulation do the snapping
-                            isCurrentStateSpeculative = false;
-                            SnapTo(latestServerState);
+                            LoadInput(input);
+                            if (DEBUG)
+                                Debug.Log($"[ClientPredictedEntiy][ClientFollowerSimulationTick][OK] entityId:{id} tickId:{tickId} withInput:{input} psr:{latestServerState}");
                         }
-                        
-                        if (APPLY_SERVER_INPUT_TO_FOLLOWERS)
+                        else
                         {
-                            PredictionInputRecord input = latestServerState.input;
-                            if (input != null)
-                            {
-                                LoadInput(input);
-                                if (DEBUG)
-                                    Debug.Log($"[ClientPredictedEntiy][ClientFollowerSimulationTick][OK] entityId:{id} withInput:{input} psr:{latestServerState}");
-                            }
-                            else
-                            {
-                                if (DEBUG)
-                                    Debug.Log($"[ClientPredictedEntiy][ClientFollowerSimulationTick][NO_INPT] entityId:{id} Missing input");
-                            }
+                            if (DEBUG)
+                                Debug.Log($"[ClientPredictedEntiy][ClientFollowerSimulationTick][NO_INPT] entityId:{id} tickId:{tickId} Missing input");
                         }
                     }
-                    else
-                    {
-                        if (DEBUG)
-                            Debug.Log($"[ClientPredictedEntiy][ClientFollowerSimulationTick][MISSING] entityId:{id} Missing end of buffer...");
-                    }
-                    //NOTE: by design we don't call LoadInput again in the absence of a server tick, expect each input driven component to keep state and use it in the absence of new input.
                 }
+                else
+                {
+                    if (DEBUG)
+                        Debug.Log($"[ClientPredictedEntiy][ClientFollowerSimulationTick][MISSING] entityId:{id} tickId:{tickId} Missing end of buffer...");
+                }
+                //NOTE: by design we don't call LoadInput again in the absence of a server tick, expect each input driven component to keep state and use it in the absence of new input.
             }
-            //NOTE: non-controllable followers need nothing here...
             
             //NOTE: we also always apply forces as there can be game logic that computes how the object moves.
             ApplyForces();
@@ -406,7 +404,7 @@ namespace Sector0.Ursitoare.Components
                 	Debug.Log($"[ClientPreditedEntity][AddServerState] i:{id} t:{lastAppliedTick} data:{serverRecord}");
             }
             lastSvTickId = serverStateBuffer.GetEndTick();
-            if (isControlledLocally && !PredictionManager.PREDICTION_ENABLED)
+            if (isControlledLocally && !ClientPredictionManager.PREDICTION_ENABLED)
             {
                 //NOTE: this allows you to turn off prediction and show how large the delay is and what it feels like...
                 SnapToServer(lastSvTickId);
