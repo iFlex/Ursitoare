@@ -41,7 +41,28 @@ namespace Sector0.Ursitoare
         private TickIndexedBuffer<uint> tickResimCounter = new TickIndexedBuffer<uint>(RESIM_TICK_COUNT_BUFFER_SIZE);
         
         public bool resimulating { get; private set; } = false;
+        
+        private static HashSet<ClientPredictedEntity> ENTITY_REG_QUEUE = new HashSet<ClientPredictedEntity>();
+        public static void RegisterEntity(ClientPredictedEntity entity)
+        {
+            if (Instance == null)
+            {
+                ENTITY_REG_QUEUE.Add(entity);
+                return;
+            }
+            Instance.AddPredictedEntity(entity);
+        }
 
+        public static void UnregisterEntity(ClientPredictedEntity entity)
+        {
+            if (Instance == null)
+            {
+                ENTITY_REG_QUEUE.Remove(entity);
+                return;
+            }
+            Instance.RemovePredictedEntity(entity);
+        }
+        
         public ClientPredictionManager(Action<uint> unreliableClientHeartbeadSender, Action<uint, uint, PredictionInputRecord> unreliableClientStateSender)
         {
             this.unreliableClientHeartbeadSender = unreliableClientHeartbeadSender;
@@ -54,6 +75,12 @@ namespace Sector0.Ursitoare
             clientTickRTTBuffer = new TickIndexedBuffer<TickRttRecord>(CLIENT_RTT_MEASUREMENTS_BUFFER_SIZE);
             clientTickRTTBuffer.emptyValue = new TickRttRecord();
             tickResimCounter.emptyValue = 0;
+            
+            foreach (ClientPredictedEntity entity in ENTITY_REG_QUEUE)
+            {
+                AddPredictedEntity(entity);
+            }
+            ENTITY_REG_QUEUE.Clear();
         }
         
         protected override void Validate()

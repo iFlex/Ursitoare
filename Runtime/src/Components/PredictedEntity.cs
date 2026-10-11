@@ -24,11 +24,11 @@ namespace Sector0.Ursitoare.Components
         {
             if (IsServer())
             {
-                ServerPredictionManager.Instance.AddPredictedEntity(GetServerEntity());
+                ServerPredictionManager.RegisterEntity(GetServerEntity());
             }
             else if (IsClient())
             {
-                ClientPredictionManager.Instance.AddPredictedEntity(GetClientEntity());
+                ClientPredictionManager.RegisterEntity(GetClientEntity());
             }
         }
 
@@ -36,11 +36,11 @@ namespace Sector0.Ursitoare.Components
         {
             if (IsServer())
             {
-                ServerPredictionManager.Instance.RemovePredictedEntity(GetServerEntity());
+                ServerPredictionManager.UnregisterEntity(GetServerEntity());
             }
             else if (IsClient())
             {
-                ClientPredictionManager.Instance.RemovePredictedEntity(GetClientEntity());
+                ClientPredictionManager.UnregisterEntity(GetClientEntity());
             }
         }
     }

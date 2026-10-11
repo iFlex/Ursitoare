@@ -34,6 +34,27 @@ namespace Sector0.Ursitoare
         protected int invalidConnectionId;
         protected int serverConnectionId;
         
+        private static HashSet<ServerPredictedEntity> ENTITY_REG_QUEUE = new HashSet<ServerPredictedEntity>();
+        public static void RegisterEntity(ServerPredictedEntity entity)
+        {
+            if (Instance == null)
+            {
+                ENTITY_REG_QUEUE.Add(entity);
+                return;
+            }
+            Instance.AddPredictedEntity(entity);
+        }
+
+        public static void UnregisterEntity(ServerPredictedEntity entity)
+        {
+            if (Instance == null)
+            {
+                ENTITY_REG_QUEUE.Remove(entity);
+                return;
+            }
+            Instance.RemovePredictedEntity(entity);
+        }
+        
         public ServerPredictionManager(int invalidConnId, int serverConnId, Action<int, uint, PhysicsStateRecord> unreliableServerStateSender, Action<int, WorldStateRecord> unreliableServerWorldStateSender, Action<int, uint, bool> reliableServerSetControlledLocally, Func<IEnumerable<int>> connectionsIterator)
         {
             invalidConnectionId = invalidConnId;
@@ -48,6 +69,12 @@ namespace Sector0.Ursitoare
             Validate();
             PhysicsController.Setup(true);
             Instance = this;
+
+            foreach (ServerPredictedEntity entity in ENTITY_REG_QUEUE)
+            {
+                AddPredictedEntity(entity);
+            }
+            ENTITY_REG_QUEUE.Clear();
         }
         
         protected override void Validate()
