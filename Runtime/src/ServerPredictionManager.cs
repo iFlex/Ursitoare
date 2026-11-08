@@ -35,6 +35,7 @@ namespace Sector0.Ursitoare
         protected int serverConnectionId;
         
         private static HashSet<ServerPredictedEntity> ENTITY_REG_QUEUE = new HashSet<ServerPredictedEntity>();
+        private static Dictionary<ServerPredictedEntity, int> ENTITY_OWNER_SET_QUEUE = new Dictionary<ServerPredictedEntity, int>();
         public static void RegisterEntity(ServerPredictedEntity entity)
         {
             if (Instance == null)
@@ -54,6 +55,16 @@ namespace Sector0.Ursitoare
             }
             Instance.RemovePredictedEntity(entity);
         }
+
+        public static void SetOwner(ServerPredictedEntity entity, int ownerId)
+        {
+            if (Instance == null)
+            {
+                ENTITY_OWNER_SET_QUEUE[entity] = ownerId;
+                return;
+            }
+            Instance.SetEntityOwner(entity, ownerId);
+        }
         
         public ServerPredictionManager(int invalidConnId, int serverConnId, Action<int, uint, PhysicsStateRecord> unreliableServerStateSender, Action<int, WorldStateRecord> unreliableServerWorldStateSender, Action<int, uint, bool> reliableServerSetControlledLocally, Func<IEnumerable<int>> connectionsIterator)
         {
@@ -72,9 +83,20 @@ namespace Sector0.Ursitoare
 
             foreach (ServerPredictedEntity entity in ENTITY_REG_QUEUE)
             {
-                AddPredictedEntity(entity);
+                if (entity.gameObject)
+                {
+                    AddPredictedEntity(entity);
+                }
             }
             ENTITY_REG_QUEUE.Clear();
+            foreach (KeyValuePair<ServerPredictedEntity, int> pair in ENTITY_OWNER_SET_QUEUE)
+            {
+                if (pair.Key.gameObject)
+                {
+                    SetEntityOwner(pair.Key, pair.Value);
+                }   
+            }
+            ENTITY_OWNER_SET_QUEUE.Clear();
         }
         
         protected override void Validate()

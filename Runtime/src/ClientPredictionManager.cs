@@ -78,7 +78,10 @@ namespace Sector0.Ursitoare
             
             foreach (ClientPredictedEntity entity in ENTITY_REG_QUEUE)
             {
-                AddPredictedEntity(entity);
+                if (entity.gameObject)
+                {
+                    AddPredictedEntity(entity);
+                }
             }
             ENTITY_REG_QUEUE.Clear();
         }
